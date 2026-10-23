@@ -7,11 +7,20 @@ public class ConfiguracionProceso {
     private String ruta;
     private String palabra;
 
+    /**
+     *
+     * @param ruta
+     * @param palabra
+     */
     public ConfiguracionProceso(String ruta, String palabra) {
         this.ruta = ruta;
         this.palabra = palabra;
     }
 
+    /**
+     *
+     * @return
+     */
     public String getRuta() {
         return ruta;
     }
