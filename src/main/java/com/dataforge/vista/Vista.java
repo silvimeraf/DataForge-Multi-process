@@ -46,7 +46,7 @@ public class Vista {
             System.out.println("Seleccione una tarea:");
             System.out.println("1. ANALIZAR UN FICHERO DE TEXTO");
             System.out.println("2. ANALIZAR TEXTO INTRODUCIDO POR TECLADO");
-            System.out.println("3. VOLVER A MENÚ PROINCIPAL");
+            System.out.println("3. VOLVER A MENÚ PRINCIPAL");
             System.out.print("Seleciona una opcion: ");
             try {
                 opcion = sc.nextInt();
