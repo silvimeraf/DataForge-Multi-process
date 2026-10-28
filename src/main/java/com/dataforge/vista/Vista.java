@@ -3,6 +3,7 @@ package com.dataforge.vista;
 import com.dataforge.controlador.Accion;
 
 import java.util.InputMismatchException;
+import java.util.List;
 import java.util.Scanner;
 
 /**
@@ -85,7 +86,17 @@ public class Vista {
     }
 
     public void pipeLine() {
+        System.out.println("===== PIPELINE (PrimeBenchmark -> TextAnalyzer) =====");
+        System.out.print("Introduce el límite N para buscar primos (ej. 10000): ");
+        int n = sc.nextInt();
+        sc.nextLine(); // limpiar el buffer del scanner
+        System.out.print("Introduce la palabra a buscar en el flujo: ");
+        String palabra = sc.nextLine();
+
+        Accion accion = new Accion(this);
+        accion.ejecutarPipeline(n, palabra); // Delega la ejecución en la clase Accion
     }
+
 
     public void salir() {
         System.out.println("Saliendo de la app");

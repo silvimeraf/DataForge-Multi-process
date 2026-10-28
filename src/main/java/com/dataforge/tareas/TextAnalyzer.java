@@ -13,15 +13,29 @@ public class TextAnalyzer {
 
         // Comprobar los argumentos recibidos
         if (args.length != 2) {
-            System.err.println("ERROR: Se necesita una ruta y una palabra.");
+            System.err.println("ERROR: Se necesita una ruta (o 'stdin') y una palabra.");
             System.exit(1);
         }
 
-        String ruta = args[0];
+        String fuente = args[0];
         String palabraBuscada = args[1];
 
         try {
-            List<String> lineas = Files.readAllLines(Path.of(ruta));
+            java.util.List<String> lineas = new java.util.ArrayList<>();
+
+            // NUEVO: Comprobamos si nos pasan datos por tubería (stdin) o por fichero
+            if (fuente.equalsIgnoreCase("stdin")) {
+                try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(System.in, java.nio.charset.StandardCharsets.UTF_8))) {
+                    String linea;
+                    while ((linea = reader.readLine()) != null) {
+                        lineas.add(linea);
+                    }
+                }
+            } else {
+                // Comportamiento original para ficheros físicos
+                lineas = Files.readAllLines(Path.of(fuente));
+            }
 
             int numeroLineas = lineas.size();
             int numeroPalabras = 0;
@@ -30,9 +44,7 @@ public class TextAnalyzer {
             String palabraMasLarga = "";
 
             for (String linea : lineas) {
-
                 numeroCaracteres += linea.length();
-
                 String texto = linea.trim();
 
                 if (texto.isEmpty()) {
@@ -42,7 +54,6 @@ public class TextAnalyzer {
                 String[] palabras = texto.split("\\s+");
 
                 for (String palabra : palabras) {
-
                     numeroPalabras++;
 
                     if (palabra.length() > palabraMasLarga.length()) {
@@ -69,5 +80,3 @@ public class TextAnalyzer {
         }
     }
 }
-
-

@@ -6,6 +6,7 @@ import com.dataforge.vista.Vista;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 public class Accion {
 
@@ -54,7 +55,50 @@ public class Accion {
         servicio.iniciar(configuracion);
     }
 
+    public void analizarFicheroConRedireccion(String ruta, String rutaSalidaFichero, boolean descartar) {
+        Path archivo = Path.of(ruta);
+        if (!Files.exists(archivo)) {
+            vista.mostrarError("El fichero no existe.");
+            return;
+        }
 
+        com.dataforge.servicios.ServicioComunicacion servicioCom = new com.dataforge.servicios.ServicioComunicacion();
+
+        List<String> comando = List.of(
+                "java", "-cp", System.getProperty("java.class.path"),
+                "com.dataforge.tareas.TextAnalyzer",
+                ruta,
+                "palabraClave" // o pedirla por parámetro
+        );
+
+        java.io.File archivoDestino = (rutaSalidaFichero != null && !rutaSalidaFichero.isBlank())
+                ? new java.io.File(rutaSalidaFichero)
+                : null;
+
+        servicioCom.ejecutarConRedireccion(comando, archivoDestino, descartar);
+    }
+
+    public void ejecutarPipeline(int nPrimos, String palabraBusqueda) {
+        vista.mostrarMensaje("Iniciando tubería (Pipeline): PrimeBenchmark -> TextAnalyzer...");
+
+        // Instanciamos el servicio de comunicación que acabamos de crear
+        com.dataforge.servicios.ServicioComunicacion servicioCom = new com.dataforge.servicios.ServicioComunicacion();
+
+        // Comando 1: PrimeBenchmark (Genera los números primos)
+        List<String> cmdPrime = List.of(
+                "java", "-cp", System.getProperty("java.class.path"),
+                "com.dataforge.tareas.PrimeBenchmark", String.valueOf(nPrimos)
+        );
+
+        // Comando 2: TextAnalyzer (Lee del flujo estándar 'stdin' a través del pipe)
+        List<String> cmdAnalyzer = List.of(
+                "java", "-cp", System.getProperty("java.class.path"),
+                "com.dataforge.tareas.TextAnalyzer", "stdin", palabraBusqueda
+        );
+
+        // Ejecutamos la tubería conectando ambos procesos
+        servicioCom.ejecutarPipeline(cmdPrime, cmdAnalyzer);
+    }
 
 }
 
