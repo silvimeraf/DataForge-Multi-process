@@ -8,6 +8,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * ServicioEjecucion.java
@@ -24,7 +25,7 @@ import java.util.List;
  *   mediante el método destroy().
  *
  * @author Yessenia Martinez / Grupo DataForge
- * @version 1.0
+ * @version 2.0
  */
 public class ServicioEjecucion {
 
@@ -32,56 +33,72 @@ public class ServicioEjecucion {
     private static final List<Process> procesosActivos = new ArrayList<>();
 
     /**
-     * Ejecuta un proceso individual (como ya tenías funcionando).
+     * Ejecuta un proceso individual notificando el PID y las líneas de salida en tiempo real
+     * hacia la interfaz gráfica mediante funciones de retrollamada (Consumer).
+     *
+     * @param configuracion     Configuración con la ruta y parámetros de la tarea.
+     * @param consumidorSalida  Callback para enviar cada línea de texto leída al TextArea de la UI.
+     * @param consumidorPid     Callback para notificar el PID real del proceso al iniciarse.
+     * @return El código de salida (Exit Code) del proceso, o -1 en caso de error.
      */
-    public void iniciar(ConfiguracionProceso configuracion) {
+    public int iniciar(ConfiguracionProceso configuracion, Consumer<String> consumidorSalida, Consumer<Long> consumidorPid) {
         List<String> comando = List.of(
                 "java",
+                "-Dfile.encoding=UTF-8", // Forzar codificación UTF-8 para evitar caracteres extraños
                 "-cp",
                 System.getProperty("java.class.path"),
                 "com.dataforge.tareas.TextAnalyzer",
                 configuracion.getRuta(),
                 configuracion.getPalabra()
         );
-        ejecutarIndividualProceso(comando);
+        return ejecutarIndividualProceso(comando, consumidorSalida, consumidorPid);
     }
 
     /**
-     * Ejecución individual interna que gestiona ProcessBuilder, PID y waitFor().
+     * Ejecución individual interna que gestiona ProcessBuilder, PID, lectura de flujos y waitFor().
      */
-    private int ejecutarIndividualProceso(List<String> comando) {
+    private int ejecutarIndividualProceso(List<String> comando, Consumer<String> consumidorSalida, Consumer<Long> consumidorPid) {
         Process procesoActual = null;
         try {
             ProcessBuilder pb = new ProcessBuilder(comando);
+            // Redirigir la salida de errores junto con la estándar para capturarlo todo unificado
             pb.redirectErrorStream(true);
 
             procesoActual = pb.start();
 
+            // Sincronizar y registrar el proceso activo para la parada de emergencia (destroy)
             synchronized (procesosActivos) {
                 procesosActivos.add(procesoActual);
             }
 
-            System.out.println("Proceso iniciado con PID: " + procesoActual.pid());
+            long pidReal = procesoActual.pid();
+            if (consumidorPid != null) {
+                consumidorPid.accept(pidReal); // Notificamos el PID real a la UI
+            }
+            consumidorSalida.accept("[INFO] Proceso iniciado con PID: " + pidReal);
 
-            // Lectura de la salida estándar
+            // Lectura en tiempo real de la salida estándar del subproceso con codificación UTF-8
             try (BufferedReader br = new BufferedReader(
                     new InputStreamReader(procesoActual.getInputStream(), StandardCharsets.UTF_8))) {
                 String linea;
                 while ((linea = br.readLine()) != null) {
-                    System.out.println(linea);
+                    consumidorSalida.accept(linea); // Enviamos cada línea al TextArea de la interfaz
                 }
             }
 
+            // Esperar a que el proceso concluya y capturar su código de salida real
             int codigoSalida = procesoActual.waitFor();
+            consumidorSalida.accept("[INFO] Proceso finalizado con Exit Code: " + codigoSalida);
             return codigoSalida;
 
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            System.err.println("Error en la ejecución del proceso: " + e.getMessage());
+            consumidorSalida.accept("[ERROR] Error en la ejecución del proceso: " + e.getMessage());
             return -1;
         } finally {
+            // Asegurar la retirada del proceso de la lista de activos al terminar
             if (procesoActual != null) {
                 synchronized (procesosActivos) {
                     procesosActivos.remove(procesoActual);
@@ -91,34 +108,32 @@ public class ServicioEjecucion {
     }
 
     /**
-     * MODO SECUENCIAL: Los procesos se lanzan uno detrás de otro.
-     * El siguiente no comienza hasta que el anterior termina.
+     * MODO SECUENCIAL: Los procesos se lanzan uno detrás de otro de forma síncrona.
      */
-    public long ejecutarSecuencial(List<List<String>> listaComandos) {
+    public long ejecutarSecuencial(List<List<String>> listaComandos, Consumer<String> consumidorSalida) {
         long tiempoInicioTotal = System.currentTimeMillis();
-        System.out.println("--- INICIANDO EJECUCIÓN SECUENCIAL ---");
+        consumidorSalida.accept("--- INICIANDO EJECUCIÓN SECUENCIAL ---");
 
         for (List<String> comando : listaComandos) {
-            int codigo = ejecutarIndividualProceso(comando);
-            System.out.println("Proceso secuencial finalizado con código: " + codigo);
+            int codigo = ejecutarIndividualProceso(comando, consumidorSalida, null);
+            consumidorSalida.accept("Proceso secuencial finalizado con código: " + codigo);
         }
 
         long tiempoFinTotal = System.currentTimeMillis();
         long duracionTotal = tiempoFinTotal - tiempoInicioTotal;
-        System.out.println("Tiempo total secuencial: " + duracionTotal + " ms");
+        consumidorSalida.accept("Tiempo total secuencial: " + duracionTotal + " ms");
         return duracionTotal;
     }
 
     /**
-     * MODO PARALELO (SIN HILOS): Lanza todos los procesos de golpe y espera a que terminen.
+     * MODO PARALELO (SIN HILOS MANUALES): Lanza todos los procesos del S.O. de golpe y espera.
      */
-    public long ejecutarParalelo(List<List<String>> listaComandos) {
+    public long ejecutarParalelo(List<List<String>> listaComandos, Consumer<String> consumidorSalida) {
         long tiempoInicioTotal = System.currentTimeMillis();
-        System.out.println("--- INICIANDO EJECUCIÓN PARALELA ---");
+        consumidorSalida.accept("--- INICIANDO EJECUCIÓN PARALELA ---");
 
         List<Process> procesosLanzados = new ArrayList<>();
 
-        // 1. Lanzar todos los procesos de forma simultánea sin usar hilos
         for (List<String> comando : listaComandos) {
             try {
                 ProcessBuilder pb = new ProcessBuilder(comando);
@@ -129,20 +144,19 @@ public class ServicioEjecucion {
                 synchronized (procesosActivos) {
                     procesosActivos.add(p);
                 }
-                System.out.println("Proceso paralelo lanzado con PID: " + p.pid());
+                consumidorSalida.accept("Proceso paralelo lanzado con PID: " + p.pid());
             } catch (IOException e) {
-                System.err.println("Error al lanzar proceso en paralelo: " + e.getMessage());
+                consumidorSalida.accept("[ERROR] Error al lanzar proceso en paralelo: " + e.getMessage());
             }
         }
 
-        // 2. Esperar a que todos terminen mediante waitFor() y recoger códigos de salida
         for (Process p : procesosLanzados) {
             try {
                 int codigo = p.waitFor();
-                System.out.println("Proceso PID " + p.pid() + " terminó con código: " + codigo);
+                consumidorSalida.accept("Proceso PID " + p.pid() + " terminó con código: " + codigo);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                System.err.println("Espera interrumpida para el proceso PID " + p.pid());
+                consumidorSalida.accept("[ERROR] Espera interrumpida para el proceso PID " + p.pid());
             } finally {
                 synchronized (procesosActivos) {
                     procesosActivos.remove(p);
@@ -152,12 +166,12 @@ public class ServicioEjecucion {
 
         long tiempoFinTotal = System.currentTimeMillis();
         long duracionTotal = tiempoFinTotal - tiempoInicioTotal;
-        System.out.println("Tiempo total paralelo: " + duracionTotal + " ms");
+        consumidorSalida.accept("Tiempo total paralelo: " + duracionTotal + " ms");
         return duracionTotal;
     }
 
     /**
-     * Método para detener procesos activos mediante destroy() (Requisito del RA1).
+     * Método para detener todos los procesos activos mediante destroy() (Requisito del RA1).
      */
     public static void detenerProcesosActivos() {
         synchronized (procesosActivos) {

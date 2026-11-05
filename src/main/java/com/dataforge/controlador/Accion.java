@@ -52,8 +52,7 @@ public class Accion {
         vista.mostrarMensaje("Datos validados correctamente.");
         ConfiguracionProceso configuracion = new ConfiguracionProceso(ruta, palabra);
         ServicioEjecucion servicio = new ServicioEjecucion();
-        servicio.iniciar(configuracion);
-    }
+        servicio.iniciar(configuracion, linea -> vista.mostrarMensaje(linea), pid -> {});    }
 
     public void analizarFicheroConRedireccion(String ruta, String rutaSalidaFichero, boolean descartar) {
         Path archivo = Path.of(ruta);

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.dataforge.controlador.ControladorVista"
+            prefWidth="950" prefHeight="700"
+            style="-fx-background-color: #f4f4f4;">
+
+    <!-- TOP: ZONA DE CONFIGURACIÓN Y ACCIONES -->
+    <top>
+        <VBox spacing="10" style="-fx-padding: 15; -fx-background-color: #ffffff; -fx-border-color: #dddddd;">
+            <Label text="DataForge - Panel de Control de Procesos" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
+
+            <HBox spacing="15" alignment="CENTER_LEFT">
+                <Label text="Seleccionar Tarea:"/>
+                <ComboBox fx:id="comboTareas" prefWidth="220" promptText="Elija una tarea..."/>
+                <Label text="Parámetro / Ruta:"/>
+                <TextField fx:id="txtParametro" promptText="Ej: archivo.txt o valor numérico" HBox.hgrow="ALWAYS"/>
+            </HBox>
+
+            <HBox spacing="10" alignment="CENTER_RIGHT">
+                <Button fx:id="btnIniciar" text="▶ Iniciar Ejecución" style="-fx-background-color: #2e7d32; -fx-text-fill: white; -fx-font-weight: bold;"/>
+                <Button fx:id="btnDetener" text="⏹ Detener (destroy)" style="-fx-background-color: #c62828; -fx-text-fill: white; -fx-font-weight: bold;"/>
+            </HBox>
+        </VBox>
+    </top>
+
+    <!-- CENTER: ZONA DE MONITORIZACIÓN (TABLA DE PROCESOS) -->
+    <center>
+        <VBox spacing="5" style="-fx-padding: 10;">
+            <Label text="Monitor de Procesos del Sistema (OS ProcessBuilder)" style="-fx-font-weight: bold;"/>
+            <TableView fx:id="tablaProcesos" VBox.vgrow="ALWAYS">
+                <columns>
+                    <TableColumn fx:id="colId" text="ID" prefWidth="50"/>
+                    <TableColumn fx:id="colPid" text="PID" prefWidth="80"/>
+                    <TableColumn fx:id="colTarea" text="Tarea" prefWidth="180"/>
+                    <TableColumn fx:id="colEstado" text="Estado" prefWidth="120"/>
+                    <TableColumn fx:id="colExitCode" text="Exit Code" prefWidth="80"/>
+                </columns>
+            </TableView>
+        </VBox>
+    </center>
+
+    <!-- BOTTOM: ZONA DE SALIDAS (STDOUT / STDERR) -->
+    <bottom>
+        <SplitPane dividerPositions="0.5" prefHeight="200" style="-fx-padding: 10;">
+            <VBox spacing="5">
+                <Label text="Salida Estándar (STDOUT)" style="-fx-font-weight: bold; -fx-text-fill: #1b5e20;"/>
+                <TextArea fx:id="txtStdout" editable="false" VBox.vgrow="ALWAYS" style="-fx-font-family: monospace;"/>
+            </VBox>
+            <VBox spacing="5">
+                <Label text="Salida de Errores (STDERR)" style="-fx-font-weight: bold; -fx-text-fill: #b71c1c;"/>
+                <TextArea fx:id="txtStderr" editable="false" VBox.vgrow="ALWAYS" style="-fx-font-family: monospace;"/>
+            </VBox>
+        </SplitPane>
+    </bottom>
+
+</BorderPane>
