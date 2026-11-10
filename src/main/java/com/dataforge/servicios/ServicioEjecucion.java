@@ -1,5 +1,7 @@
 package com.dataforge.servicios;
 import com.dataforge.modelo.ConfiguracionProceso;
+import com.dataforge.modelo.EjecucionProceso;
+
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 /**
@@ -36,6 +38,13 @@ public class ServicioEjecucion {
             pb.redirectErrorStream(true);
             // 4. Iniciar el proceso hijo.
             Process p = pb.start();
+            // Crear el servicio de monitorización.
+            ServicioMonitorizacion monitor = new ServicioMonitorizacion();
+            // Registrar el inicio del proceso hijo.
+            EjecucionProceso ejecucion = monitor.registrarInicio(p);
+            // Mostrar los datos iniciales.
+            System.out.println("PID: " + ejecucion.getPid());
+            System.out.println("Estado inicial: " + ejecucion.getEstado());
             // 5. Leer la salida del proceso hijo utilizando la codificación UTF-8.
             try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
                 String linea = br.readLine();
@@ -47,6 +56,14 @@ public class ServicioEjecucion {
             }
             // 6. Esperar a que termine el proceso. waitFor() devuelve su código de salida.
             int codigoSalida = p.waitFor();
+            // Registrar la finalización del proceso.
+            monitor.registrarFinalizacion(ejecucion, codigoSalida);
+            // Mostrar los resultados de la monitorización.
+            System.out.println("Estado final: " + ejecucion.getEstado());
+            System.out.println("Duración monitorizada: "
+                    + ejecucion.getDuracion() + " ms");
+            System.out.println("Código de salida: "
+                    + ejecucion.getCodigoSalida());
             // 7. Interpretar el resultado.
             if (codigoSalida == 0) {
                 System.out.println(
@@ -96,9 +113,13 @@ public class ServicioEjecucion {
             pb.redirectErrorStream(true);
             // 3. Iniciar el proceso hijo.
             proceso = pb.start();
-            System.out.println(
-                    "Proceso iniciado. PID: " + proceso.pid()
-            );
+            // Crear el servicio encargado de monitorizar la ejecución.
+            ServicioMonitorizacion monitor = new ServicioMonitorizacion();
+            // Registrar el PID, el estado inicial y el instante de inicio.
+            EjecucionProceso ejecucion = monitor.registrarInicio(proceso);
+            // Mostrar la información inicial del proceso.
+            System.out.println("PID: " + ejecucion.getPid());
+            System.out.println("Estado inicial: " + ejecucion.getEstado());
             // 4. Enviar el texto al stdin del proceso.
             try (BufferedWriter escritor = new BufferedWriter(
                     new OutputStreamWriter(
@@ -121,6 +142,14 @@ public class ServicioEjecucion {
             }
             // 6. Esperar la finalización del proceso.
             int codigoSalida = proceso.waitFor();
+            // Registrar la finalización del proceso hijo.
+            monitor.registrarFinalizacion(ejecucion, codigoSalida);
+            // Mostrar los resultados de la monitorización.
+            System.out.println("Estado final: " + ejecucion.getEstado());
+            System.out.println("Duración monitorizada: "
+                    + ejecucion.getDuracion() + " ms");
+            System.out.println("Código de salida: "
+                    + ejecucion.getCodigoSalida());
             if (codigoSalida == 0) {
                 System.out.println(
                         "Ejecución finalizada correctamente."
@@ -170,15 +199,15 @@ public class ServicioEjecucion {
             pb.redirectErrorStream(true);
             // 3. Iniciar el proceso hijo.
             proceso = pb.start();
-            // Mostrar el identificador del proceso creado.
-            System.out.println(
-                    "PrimeBenchmark iniciado. PID: " + proceso.pid()
-            );
+            // Crea el servicio encargado de monitorizar el proceso hijo.
+            ServicioMonitorizacion monitor = new ServicioMonitorizacion();
+            // Registra el PID, el estado EJECUTANDO y el instante de inicio.
+            EjecucionProceso ejecucion = monitor.registrarInicio(proceso);
+            // Muestra la información registrada por el monitor.
+            System.out.println("PID: " + ejecucion.getPid());
+            System.out.println("Estado inicial: " + ejecucion.getEstado());
             // 4. Leer la salida generada por PrimeBenchmark.
-            try (BufferedReader lector = new BufferedReader(
-                    new InputStreamReader(
-                            proceso.getInputStream(),
-                            StandardCharsets.UTF_8))) {
+            try (BufferedReader lector = new BufferedReader(new InputStreamReader(proceso.getInputStream(), StandardCharsets.UTF_8))) {
                 String linea;
                 // Leer hasta que el proceso cierre su salida.
                 while ((linea = lector.readLine()) != null) {
@@ -187,6 +216,14 @@ public class ServicioEjecucion {
             }
             // 5. Esperar a que finalice el proceso hijo.
             int codigoSalida = proceso.waitFor();
+            // Registra el resultado una vez finalizado el proceso hijo.
+            monitor.registrarFinalizacion(ejecucion, codigoSalida);
+            // Consulta el estado final almacenado en el modelo.
+            System.out.println("Estado final: " + ejecucion.getEstado());
+            // Muestra la duración registrada por el monitor, en milisegundos.
+            System.out.println("Duración monitorizada: " + ejecucion.getDuracion() + " ms");
+            // Muestra el código de salida del proceso hijo.
+            System.out.println("Código de salida: " + ejecucion.getCodigoSalida());
             // 6. Comprobar el resultado de la ejecución.
             if (codigoSalida == 0) {
                 System.out.println(
@@ -205,7 +242,6 @@ public class ServicioEjecucion {
                     "Error al ejecutar PrimeBenchmark: "
                             + e.getMessage()
             );
-
         } catch (InterruptedException e) {
             // Restaurar el estado de interrupción del hilo actual.
             Thread.currentThread().interrupt();

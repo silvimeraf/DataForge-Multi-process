@@ -84,18 +84,39 @@ public class Vista {
         Accion accion = new Accion(this);
         accion.analizarFichero(ruta, palabra);
     }
+
     /**
-     * Solicita al usuario un texto y una palabra de búsqueda.
-     * Envía los datos al controlador para que sean
-     * procesados mediante la entrada estándar (stdin).
+     * Solicita al usuario un texto de varias líneas y una palabra de búsqueda.
+     * La introducción del texto finaliza cuando el usuario escribe FIN en una línea independiente.
+     * Envía los datos al controlador para que sean procesados mediante la
+     * entrada estándar (stdin) de un proceso hijo.
      */
     public void analizarTexto() {
-        System.out.print("Introduce el texto: ");
-        String texto = sc.nextLine();
+        // Informar al usuario de cómo finalizar la entrada.
+        System.out.println("Introduce el texto:");
+        System.out.println("Escribe FIN en una línea independiente para terminar.");
+        // Acumular las distintas líneas introducidas.
+        StringBuilder contenido = new StringBuilder();
+        // Leer la primera línea.
+        String linea = sc.nextLine();
+        // Continuar mientras no se introduzca FIN.
+        while (!linea.equals("FIN")) {
+            // Añadir la línea al contenido.
+            if (contenido.length() > 0) {
+                contenido.append(System.lineSeparator());
+            }
+            contenido.append(linea);
+            // Leer la siguiente línea.
+            linea = sc.nextLine();
+        }
+        // Convertir el contenido acumulado en String.
+        String texto = contenido.toString();
+        // Solicitar la palabra que se desea buscar.
         System.out.print("Introduce la palabra a buscar: ");
         String palabra = sc.nextLine();
+        // Crear el controlador.
         Accion accion = new Accion(this);
-        // Enviar el contenido, no una ruta de fichero.
+        // Enviar el texto completo y la palabra al controlador.
         accion.analizarTexto(texto, palabra);
     }
     /**
