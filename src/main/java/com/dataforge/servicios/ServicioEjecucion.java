@@ -4,6 +4,8 @@ import com.dataforge.modelo.EjecucionProceso;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+
 /**
  * Servicio encargado de iniciar y gestionar procesos externos.
  * Utiliza ProcessBuilder para ejecutar tareas Java en procesos independientes del sistema operativo.
@@ -253,6 +255,70 @@ public class ServicioEjecucion {
                 proceso.destroy();
             }
         }
+    }
+    /**
+     * Ejecuta una lista de comandos de forma secuencial.
+     * Cada proceso comienza únicamente cuando el anterior ha finalizado.
+     * Registra el PID, estado, duración y código de salida de cada proceso mediante ServicioMonitorizacion.
+     * @param listaComandos comandos de los procesos que se ejecutarán.
+     * @return duración total de la ejecución, en milisegundos.
+     */
+    public long ejecutarSecuencial(List<List<String>> listaComandos) {
+        // 1. Registrar el instante inicial del lote.
+        long tiempoInicioTotal = System.currentTimeMillis();
+        System.out.println("===== EJECUCIÓN SECUENCIAL =====");
+        // 2. Recorrer los comandos en el orden recibido.
+        for (List<String> comando : listaComandos) {
+            Process proceso = null;
+            try {
+                // 3. Preparar el proceso hijo.
+                ProcessBuilder pb = new ProcessBuilder(comando);
+                // Unificar stdout y stderr para evitar dejar sin consumir uno de los dos flujos.
+                pb.redirectErrorStream(true);
+                // 4. Iniciar el proceso.
+                proceso = pb.start();
+                // 5. Registrar el inicio mediante nuestro monitor.
+                ServicioMonitorizacion monitor = new ServicioMonitorizacion();
+                EjecucionProceso ejecucion = monitor.registrarInicio(proceso);
+                System.out.println("PID: " + ejecucion.getPid());
+                System.out.println("Estado inicial: " + ejecucion.getEstado());
+                // 6. Leer la salida del proceso hijo.
+                try (BufferedReader lector = new BufferedReader(
+                        new InputStreamReader(
+                                proceso.getInputStream(),
+                                StandardCharsets.UTF_8))) {
+                    String linea;
+                    while ((linea = lector.readLine()) != null) {
+                        System.out.println(linea);
+                    }
+                }
+                // 7. Esperar su finalización. El siguiente proceso no comienza hasta terminar este.
+                int codigoSalida = proceso.waitFor();
+                // 8. Registrar los resultados individuales.
+                monitor.registrarFinalizacion(ejecucion, codigoSalida);
+                System.out.println("Estado final: " + ejecucion.getEstado());
+                System.out.println("Duración: " + ejecucion.getDuracion() + " ms");
+                System.out.println("Código de salida: " + ejecucion.getCodigoSalida());
+
+            } catch (IOException e) {
+                System.err.println("Error al ejecutar el proceso: " + e.getMessage());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                System.err.println(
+                        "La ejecución secuencial ha sido interrumpida."
+                );
+                if (proceso != null && proceso.isAlive()) {
+                    proceso.destroy();
+                }
+                // Detener el lote ante una interrupción.
+                return System.currentTimeMillis() - tiempoInicioTotal;
+            }
+        }
+        // 9. Calcular la duración total del lote.
+        long duracionTotal =
+                System.currentTimeMillis() - tiempoInicioTotal;
+        System.out.println("Duración total secuencial: " + duracionTotal + " ms");
+        return duracionTotal;
     }
 }
 
