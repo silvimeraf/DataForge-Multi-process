@@ -1,17 +1,12 @@
 package com.dataforge.vista;
-
 import com.dataforge.controlador.Accion;
-
 import java.util.InputMismatchException;
 import java.util.Scanner;
-
 /**
  * Vista no ejecuta procesos ni contiene la lógica de negocio. Su responsabilidad es la interacción con el usuario.
  */
 public class Vista {
     Scanner sc = new Scanner(System.in);
-
-
     public void iniciar() {
         int opcion;
         do {
@@ -38,7 +33,11 @@ public class Vista {
             }
         } while (opcion != 4);
     }
-
+    /**
+     * Muestra el submenú de TextAnalyzer.
+     * Permite analizar un fichero, introducir texto por teclado o regresar al menú principal.
+     * El regreso se realiza finalizando el bucle, sin llamar nuevamente al métod o iniciar().
+     */
     public void textAnalizer() {
         int opcion;
         do {
@@ -46,24 +45,37 @@ public class Vista {
             System.out.println("Seleccione una tarea:");
             System.out.println("1. ANALIZAR UN FICHERO DE TEXTO");
             System.out.println("2. ANALIZAR TEXTO INTRODUCIDO POR TECLADO");
-            System.out.println("3. VOLVER A MENÚ PROINCIPAL");
-            System.out.print("Seleciona una opcion: ");
+            System.out.println("3. VOLVER AL MENÚ PRINCIPAL");
+            System.out.print("Selecciona una opción: ");
             try {
                 opcion = sc.nextInt();
-                sc.nextLine();
+                sc.nextLine(); // Consumir el salto de línea pendiente.
                 switch (opcion) {
                     case 1 -> analizarFichero();
                     case 2 -> analizarTexto();
-                    case 3 -> iniciar();
-                    default -> System.out.print("Debes introducir un valor de la lista");
+                    // No llamamos a iniciar(). El bucle terminará porque opcion == 3.
+                    case 3 -> System.out.println(
+                            "Volviendo al menú principal..."
+                    );
+                    default -> System.out.println(
+                            "Debes introducir una opción válida."
+                    );
                 }
             } catch (InputMismatchException e) {
-                System.err.print("Debes introducir un valor de la lista" + e.getMessage());
-                sc.nextLine();
+                System.err.println(
+                        "Debes introducir un número válido."
+                );
+                sc.nextLine(); // Descartar la entrada incorrecta.
                 opcion = 0;
             }
         } while (opcion != 3);
     }
+    /**
+     * Solicita al usuario la ruta de un fichero de texto y la palabra que desea buscar.
+     * Recoge los datos introducidos por teclado y los envía al controlador
+     * Accion, que se encargará de validar la información y coordinar la ejecución del análisis.
+     * La Vista no realiza el análisis ni accede directamente al fichero.
+     */
     public void analizarFichero() {
         System.out.print("Introduce la ruta del fichero: ");
         String ruta = sc.nextLine();
@@ -72,21 +84,24 @@ public class Vista {
         Accion accion = new Accion(this);
         accion.analizarFichero(ruta, palabra);
     }
+    /**
+     * Solicita al usuario un texto y una palabra de búsqueda.
+     * Envía los datos al controlador para que sean
+     * procesados mediante la entrada estándar (stdin).
+     */
     public void analizarTexto() {
         System.out.print("Introduce el texto: ");
         String texto = sc.nextLine();
         System.out.print("Introduce la palabra a buscar: ");
         String palabra = sc.nextLine();
         Accion accion = new Accion(this);
-        accion.analizarFichero(texto, palabra);
+        // Enviar el contenido, no una ruta de fichero.
+        accion.analizarTexto(texto, palabra);
     }
-
     public void primeBenchmark() {
     }
-
     public void pipeLine() {
     }
-
     public void salir() {
         System.out.println("Saliendo de la app");
     }
