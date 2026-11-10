@@ -77,6 +77,41 @@ public class Accion {
         ServicioEjecucion servicio = new ServicioEjecucion();
         servicio.analizarTexto(texto, palabra);
     }
+    /**
+     * Recibe la solicitud de ejecución de PrimeBenchmark desde la Vista.
+     * Comprueba que el límite introducido sea un número entero mayor o igual que 2.
+     * Si la validación es correcta, delega la ejecución en la capa de servicios.
+     * @param limiteTexto límite numérico introducido por el usuario.
+     */
+    public void ejecutarPrimeBenchmark(String limiteTexto) {
+        // Comprueba que el usuario haya introducido un valor.
+        if (limiteTexto == null || limiteTexto.isBlank()) {
+            vista.mostrarError("Debes introducir un límite numérico.");
+            return;
+        }
+        // Declara la variable que almacenará el límite validado.
+        int limite;
+        try {
+            // Convierte el texto recibido a un número entero.
+            limite = Integer.parseInt(limiteTexto.trim());
+
+        } catch (NumberFormatException e) {
+            // Comunica el error y detiene la operación.
+            vista.mostrarError("El límite debe ser un número entero válido.");
+            return;
+        }
+        // Comprueba que el límite permita calcular números primos.
+        if (limite < 2) {
+            vista.mostrarError("El límite debe ser mayor o igual que 2.");
+            return;
+        }
+        // Confirma que los datos han superado las validaciones.
+        vista.mostrarMensaje("Datos validados correctamente.");
+        // Crea el servicio encargado de gestionar la ejecución.
+        ServicioEjecucion servicio = new ServicioEjecucion();
+        // Delega la ejecución de PrimeBenchmark en la capa de servicios.
+        servicio.ejecutarPrimeBenchmark(limite);
+    }
 }
 
 

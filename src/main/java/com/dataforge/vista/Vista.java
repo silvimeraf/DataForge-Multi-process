@@ -98,7 +98,22 @@ public class Vista {
         // Enviar el contenido, no una ruta de fichero.
         accion.analizarTexto(texto, palabra);
     }
+    /**
+     * Solicita al usuario el límite superior para calcular números primos.
+     * La Vista se encarga exclusivamente de recoger el dato y enviarlo al controlador Accion.
+     * No valida las reglas de negocio ni ejecuta procesos.
+     */
     public void primeBenchmark() {
+        // Limpia el salto de línea pendiente de la lectura del menú.
+        sc.nextLine();
+        // Solicita al usuario el límite del cálculo.
+        System.out.print("Introduce el límite para calcular números primos: ");
+        // Recoge la entrada como texto para que el controlador la valide.
+        String limite = sc.nextLine();
+        // Crea el controlador y le proporciona la referencia a la Vista.
+        Accion accion = new Accion(this);
+        // Envía el dato al controlador para gestionar la solicitud.
+        accion.ejecutarPrimeBenchmark(limite);
     }
     public void pipeLine() {
     }

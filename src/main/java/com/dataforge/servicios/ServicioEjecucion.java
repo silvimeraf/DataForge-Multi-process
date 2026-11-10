@@ -146,7 +146,78 @@ public class ServicioEjecucion {
             }
         }
     }
+    /**
+     * Ejecuta PrimeBenchmark como un proceso Java independiente.
+     * Utiliza ProcessBuilder para iniciar una nueva JVM,transmitir el límite numérico como
+     * argumento y recoger los resultados generados por el proceso hijo.
+     * También permite consultar el PID, esperar la finalización del proceso y comprobar su código de salida.
+     * @param limite límite superior para calcular números primos.
+     */
+    public void ejecutarPrimeBenchmark(int limite) {
+        // Referencia al proceso hijo para poder gestionarlo.
+        Process proceso = null;
+        try {
+            // 1. Configurar el comando que ejecutará la JVM hija.
+            ProcessBuilder pb = new ProcessBuilder(
+                    "java",
+                    "-Dfile.encoding=UTF-8",
+                    "-cp",
+                    System.getProperty("java.class.path"),
+                    "com.dataforge.tareas.PrimeBenchmark",
+                    String.valueOf(limite)
+            );
+            // 2. Unificar la salida estándar y la salida de errores.
+            pb.redirectErrorStream(true);
+            // 3. Iniciar el proceso hijo.
+            proceso = pb.start();
+            // Mostrar el identificador del proceso creado.
+            System.out.println(
+                    "PrimeBenchmark iniciado. PID: " + proceso.pid()
+            );
+            // 4. Leer la salida generada por PrimeBenchmark.
+            try (BufferedReader lector = new BufferedReader(
+                    new InputStreamReader(
+                            proceso.getInputStream(),
+                            StandardCharsets.UTF_8))) {
+                String linea;
+                // Leer hasta que el proceso cierre su salida.
+                while ((linea = lector.readLine()) != null) {
+                    System.out.println(linea);
+                }
+            }
+            // 5. Esperar a que finalice el proceso hijo.
+            int codigoSalida = proceso.waitFor();
+            // 6. Comprobar el resultado de la ejecución.
+            if (codigoSalida == 0) {
+                System.out.println(
+                        "PrimeBenchmark finalizado correctamente."
+                );
 
+            } else {
+                System.err.println(
+                        "PrimeBenchmark finalizado con error. Código: "
+                                + codigoSalida
+                );
+            }
+        } catch (IOException e) {
+            // Gestionar errores al iniciar o leer el proceso.
+            System.err.println(
+                    "Error al ejecutar PrimeBenchmark: "
+                            + e.getMessage()
+            );
+
+        } catch (InterruptedException e) {
+            // Restaurar el estado de interrupción del hilo actual.
+            Thread.currentThread().interrupt();
+            System.err.println(
+                    "La espera de PrimeBenchmark fue interrumpida."
+            );
+            // Finalizar el proceso hijo si continúa ejecutándose.
+            if (proceso != null && proceso.isAlive()) {
+                proceso.destroy();
+            }
+        }
+    }
 }
 
 
