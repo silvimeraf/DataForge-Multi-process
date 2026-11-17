@@ -19,8 +19,8 @@ public class Vista {
             System.out.println("2. PRIME_BENCHMARK");
             System.out.println("3. PIPELINE");
             System.out.println("4. EJECUCIÓN SECUENCIAL");
-            System.out.println("5. SALIR");
-            System.out.print("Selecciona una opción: ");
+            System.out.println("5. EJECUCIÓN PARALELA");
+            System.out.println("6. SALIR");
             try {
                 opcion = sc.nextInt();
                 // Consumir el salto de línea pendiente tras leer el entero.
@@ -30,7 +30,8 @@ public class Vista {
                     case 2 -> primeBenchmark();
                     case 3 -> pipeLine();
                     case 4 -> configurarEjecucionSecuencial();
-                    case 5 -> salir();
+                    case 5 -> configurarEjecucionParalela();
+                    case 6 -> salir();
                     default -> mostrarError("Debes introducir una opción válida.");
                 }
             } catch (InputMismatchException e) {
@@ -38,7 +39,7 @@ public class Vista {
                 sc.nextLine();
                 opcion = 0;
             }
-        } while (opcion != 5);
+        } while (opcion != 6);
     }
     /**
      * Muestra el submenú de TextAnalyzer.
@@ -224,7 +225,102 @@ public class Vista {
         Accion accion = new Accion(this);
         accion.ejecutarSecuencial(comandos, repeticiones);
     }
+    /**
+     * Recoge desde consola la configuración de un lote de procesos paralelos.
+     * Permite configurar las repeticiones, el número de procesos
+     * y los parámetros específicos de cada tarea.
+     *
+     * La Vista construye los comandos y delega su ejecución
+     * en el controlador Accion.
+     */
+    public void configurarEjecucionParalela() {
 
+        System.out.println("===== EJECUCIÓN PARALELA =====");
+
+        // 1. Solicitar el número de repeticiones.
+        int repeticiones = leerEnteroPositivo("Número de repeticiones: ");
+
+        // 2. Solicitar el número de procesos por repetición.
+        int numeroProcesos;
+
+        do {
+            numeroProcesos = leerEnteroPositivo("Número de procesos por repetición (1-100): ");
+
+            if (numeroProcesos > 100) {
+                mostrarError("El máximo permitido es 100 procesos.");
+            }
+
+        } while (numeroProcesos > 100);
+
+        // 3. Comprobar que el total no supera 100 ejecuciones.
+        long total = (long) repeticiones * numeroProcesos;
+
+        if (total > 100) {
+            mostrarError("El lote supera el máximo de 100 ejecuciones.");
+            return;
+        }
+
+        // 4. Crear la lista de comandos del lote.
+        List<List<String>> comandos = new ArrayList<>();
+        String classpath = System.getProperty("java.class.path");
+
+        // 5. Solicitar la configuración de cada proceso.
+        for (int i = 1; i <= numeroProcesos; i++) {
+
+            System.out.println("===== PROCESO " + i + " =====");
+            System.out.println("1. PRIME_BENCHMARK");
+            System.out.println("2. TEXT_ANALYZER (FICHERO)");
+
+            int tipoTarea;
+
+            do {
+                tipoTarea = leerEnteroPositivo("Selecciona la tarea (1-2): ");
+
+                if (tipoTarea > 2) {
+                    mostrarError("Selecciona una tarea válida.");
+                }
+
+            } while (tipoTarea > 2);
+
+            if (tipoTarea == 1) {
+
+                // Configurar PrimeBenchmark.
+                int limite = leerEnteroPositivo("Introduce el límite de números primos: ");
+
+                comandos.add(List.of("java",
+                        "-Dfile.encoding=UTF-8",
+                        "-Dsun.stdout.encoding=UTF-8",
+                        "-Dsun.stderr.encoding=UTF-8",
+                        "-cp", classpath, "com.dataforge.tareas.PrimeBenchmark", String.valueOf(limite)));
+
+            } else {
+
+                // Configurar TextAnalyzer.
+                System.out.print("Ruta del fichero: ");
+                String ruta = sc.nextLine().trim();
+
+                System.out.print("Palabra que deseas buscar: ");
+                String palabra = sc.nextLine().trim();
+
+                comandos.add(List.of("java",
+                        "-Dfile.encoding=UTF-8",
+                        "-Dsun.stdout.encoding=UTF-8",
+                        "-Dsun.stderr.encoding=UTF-8",
+                        "-cp", classpath, "com.dataforge.tareas.TextAnalyzer", ruta, palabra));
+            }
+        }
+
+        // 6. Mostrar el resumen del lote configurado.
+        System.out.println("===== RESUMEN DEL LOTE PARALELO =====");
+        System.out.println("Repeticiones: " + repeticiones);
+        System.out.println("Procesos por repetición: " + numeroProcesos);
+        System.out.println("Total de ejecuciones: " + total);
+        System.out.println("Comandos configurados: " + comandos.size());
+
+        // 7. Crear el controlador y delegar la ejecución paralela.
+        Accion accion = new Accion(this);
+        accion.ejecutarParalelo(comandos, repeticiones);
+    }
 
     /**
      * Solicita un número entero positivo desde consola.

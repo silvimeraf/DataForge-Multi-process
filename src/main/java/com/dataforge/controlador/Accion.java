@@ -162,6 +162,74 @@ public class Accion {
         vista.mostrarMensaje("Total de ejecuciones solicitadas: " + total);
         vista.mostrarMensaje("Duración total del lote: " + duracionTotal + " ms");
     }
+    /**
+     * Coordina la ejecución paralela de un lote de procesos.
+     *
+     * Valida los comandos y las repeticiones solicitadas,
+     * y delega el lanzamiento simultáneo de los procesos
+     * en ServicioEjecucion.
+     *
+     * @param comandos lista de comandos de los procesos hijos.
+     * @param repeticiones número de veces que se ejecutará el lote.
+     */
+    public void ejecutarParalelo(List<List<String>> comandos, int repeticiones) {
+
+        // 1. Comprobar que existen procesos configurados.
+        if (comandos == null || comandos.isEmpty()) {
+            vista.mostrarError("No hay procesos configurados.");
+            return;
+        }
+
+        // 2. Comprobar que las repeticiones sean válidas.
+        if (repeticiones <= 0) {
+            vista.mostrarError("El número de repeticiones debe ser positivo.");
+            return;
+        }
+
+        // 3. Limitar el número de procesos simultáneos.
+        if (comandos.size() > 100) {
+            vista.mostrarError("El máximo es de 100 procesos simultáneos.");
+            return;
+        }
+
+        // 4. Mantener provisionalmente el límite total de 100 ejecuciones.
+        long total = (long) comandos.size() * repeticiones;
+
+        if (total > 100) {
+            vista.mostrarError("El lote supera el máximo de 100 ejecuciones.");
+            return;
+        }
+
+        // 5. Crear el servicio de ejecución.
+        ServicioEjecucion servicio = new ServicioEjecucion();
+
+        long inicioTotal = System.currentTimeMillis();
+
+        // 6. Ejecutar cada repetición del lote.
+        for (int i = 1; i <= repeticiones; i++) {
+
+            if (Thread.currentThread().isInterrupted()) {
+                vista.mostrarError("Ejecución paralela interrumpida.");
+                return;
+            }
+
+            vista.mostrarMensaje(
+                    "===== REPETICIÓN PARALELA "
+                            + i + " DE " + repeticiones + " ====="
+            );
+
+            // Dentro de cada repetición, los procesos se lanzan en paralelo.
+            // La siguiente repetición comienza al terminar la anterior.
+            servicio.ejecutarParalelo(comandos);
+        }
+
+        // 7. Mostrar el resumen del lote.
+        long duracionTotal = System.currentTimeMillis() - inicioTotal;
+
+        vista.mostrarMensaje("Total de ejecuciones solicitadas: " + total);
+
+        vista.mostrarMensaje("Duración total del lote paralelo: " + duracionTotal + " ms");
+    }
 }
 
 

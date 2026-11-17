@@ -4,7 +4,11 @@ import com.dataforge.modelo.EjecucionProceso;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Servicio encargado de iniciar y gestionar procesos externos.
@@ -68,27 +72,17 @@ public class ServicioEjecucion {
                     + ejecucion.getCodigoSalida());
             // 7. Interpretar el resultado.
             if (codigoSalida == 0) {
-                System.out.println(
-                        "Ejecución finalizada correctamente."
-                );
+                System.out.println("Ejecución finalizada correctamente.");
             } else {
-                System.err.println(
-                        "Ejecución finalizada con error. Código: "
-                                + codigoSalida
-                );
+                System.err.println("Ejecución finalizada con error. Código: " + codigoSalida);
             }
         } catch (IOException e) {
             // Error al iniciar el proceso o leer su salida.
-            System.err.println(
-                    "Error al iniciar o leer el proceso: "
-                            + e.getMessage()
-            );
+            System.err.println("Error al iniciar o leer el proceso: " + e.getMessage());
         } catch (InterruptedException e) {
             // Restaurar el estado de interrupción del hilo actual.
             Thread.currentThread().interrupt();
-            System.err.println(
-                    "La espera del proceso fue interrumpida."
-            );
+            System.err.println("La espera del proceso fue interrumpida.");
         }
     }
     /**
@@ -124,9 +118,7 @@ public class ServicioEjecucion {
             System.out.println("Estado inicial: " + ejecucion.getEstado());
             // 4. Enviar el texto al stdin del proceso.
             try (BufferedWriter escritor = new BufferedWriter(
-                    new OutputStreamWriter(
-                            proceso.getOutputStream(),
-                            StandardCharsets.UTF_8))) {
+                    new OutputStreamWriter(proceso.getOutputStream(), StandardCharsets.UTF_8))) {
                 escritor.write(texto);
                 escritor.newLine();
             }
@@ -153,25 +145,15 @@ public class ServicioEjecucion {
             System.out.println("Código de salida: "
                     + ejecucion.getCodigoSalida());
             if (codigoSalida == 0) {
-                System.out.println(
-                        "Ejecución finalizada correctamente."
-                );
+                System.out.println("Ejecución finalizada correctamente.");
             } else {
-                System.err.println(
-                        "Ejecución finalizada con error. Código: "
-                                + codigoSalida
-                );
+                System.err.println("Ejecución finalizada con error. Código: " + codigoSalida);
             }
         } catch (IOException e) {
-            System.err.println(
-                    "Error de comunicación con el proceso: "
-                            + e.getMessage()
-            );
+            System.err.println("Error de comunicación con el proceso: " + e.getMessage());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            System.err.println(
-                    "La espera del proceso fue interrumpida."
-            );
+            System.err.println("La espera del proceso fue interrumpida.");
             if (proceso != null && proceso.isAlive()) {
                 proceso.destroy();
             }
@@ -228,28 +210,18 @@ public class ServicioEjecucion {
             System.out.println("Código de salida: " + ejecucion.getCodigoSalida());
             // 6. Comprobar el resultado de la ejecución.
             if (codigoSalida == 0) {
-                System.out.println(
-                        "PrimeBenchmark finalizado correctamente."
-                );
+                System.out.println("PrimeBenchmark finalizado correctamente.");
 
             } else {
-                System.err.println(
-                        "PrimeBenchmark finalizado con error. Código: "
-                                + codigoSalida
-                );
+                System.err.println("PrimeBenchmark finalizado con error. Código: " + codigoSalida);
             }
         } catch (IOException e) {
             // Gestionar errores al iniciar o leer el proceso.
-            System.err.println(
-                    "Error al ejecutar PrimeBenchmark: "
-                            + e.getMessage()
-            );
+            System.err.println("Error al ejecutar PrimeBenchmark: " + e.getMessage());
         } catch (InterruptedException e) {
             // Restaurar el estado de interrupción del hilo actual.
             Thread.currentThread().interrupt();
-            System.err.println(
-                    "La espera de PrimeBenchmark fue interrumpida."
-            );
+            System.err.println("La espera de PrimeBenchmark fue interrumpida.");
             // Finalizar el proceso hijo si continúa ejecutándose.
             if (proceso != null && proceso.isAlive()) {
                 proceso.destroy();
@@ -283,10 +255,7 @@ public class ServicioEjecucion {
                 System.out.println("PID: " + ejecucion.getPid());
                 System.out.println("Estado inicial: " + ejecucion.getEstado());
                 // 6. Leer la salida del proceso hijo.
-                try (BufferedReader lector = new BufferedReader(
-                        new InputStreamReader(
-                                proceso.getInputStream(),
-                                StandardCharsets.UTF_8))) {
+                try (BufferedReader lector = new BufferedReader(new InputStreamReader(proceso.getInputStream(), StandardCharsets.UTF_8))) {
                     String linea;
                     while ((linea = lector.readLine()) != null) {
                         System.out.println(linea);
@@ -315,11 +284,204 @@ public class ServicioEjecucion {
             }
         }
         // 9. Calcular la duración total del lote.
-        long duracionTotal =
-                System.currentTimeMillis() - tiempoInicioTotal;
+        long duracionTotal = System.currentTimeMillis() - tiempoInicioTotal;
         System.out.println("Duración total secuencial: " + duracionTotal + " ms");
         return duracionTotal;
     }
+    /**
+     * Ejecuta varios procesos hijos en paralelo.
+     * Primero inicia todos los procesos y después espera su finalización individual.
+     * Cada proceso utiliza archivos temporales independientes para stdout y stderr, evitando bloqueos por saturación
+     * de las tuberías de salida.
+     * @param listaComandos comandos que se ejecutarán en paralelo.
+     * @return duración total del lote en milisegundos.
+     */
+    public long ejecutarParalelo(List<List<String>> listaComandos) {
+
+        long inicioTotal = System.currentTimeMillis();
+
+        System.out.println("===== EJECUCIÓN PARALELA =====");
+
+        // Referencias de los procesos iniciados.
+        List<Process> procesos = new ArrayList<>();
+
+        // Registros de monitorización correspondientes.
+        List<EjecucionProceso> ejecuciones = new ArrayList<>();
+
+        // Archivos temporales de salida y error.
+        List<Path> salidas = new ArrayList<>();
+        List<Path> errores = new ArrayList<>();
+
+        ServicioMonitorizacion monitor = new ServicioMonitorizacion();
+
+        try {
+
+            // FASE 1: iniciar todos los procesos.
+            for (List<String> comando : listaComandos) {
+
+                // Crear y registrar inmediatamente el archivo de salida.
+                Path salida = Files.createTempFile("dataforge_stdout_", ".txt");
+                salidas.add(salida);
+
+                // Crear y registrar inmediatamente el archivo de error.
+                Path error = Files.createTempFile("dataforge_stderr_", ".txt");
+                errores.add(error);
+                ProcessBuilder pb = new ProcessBuilder(comando);
+
+                // Mantener separados stdout y stderr.
+                pb.redirectOutput(salida.toFile());
+                pb.redirectError(error.toFile());
+
+                Process proceso = pb.start();
+                // Registrar inmediatamente el proceso para poder cerrarlo si falla la monitorización.
+                procesos.add(proceso);
+                // Registrar su monitorización
+                EjecucionProceso ejecucion = monitor.registrarInicio(proceso);
+                ejecuciones.add(ejecucion);
+                System.out.println("Proceso iniciado. PID: " + ejecucion.getPid());
+            }
+
+            // FASE 2: esperar las finalizaciones.
+            for (int i = 0; i < procesos.size(); i++) {
+
+                Process proceso = procesos.get(i);
+                EjecucionProceso ejecucion = ejecuciones.get(i);
+                int codigoSalida = proceso.waitFor();
+                monitor.registrarFinalizacion(ejecucion, codigoSalida);
+
+                System.out.println("===== RESULTADO DEL PROCESO " + (i + 1) + " =====");
+                System.out.println("PID: " + ejecucion.getPid());
+                System.out.println("Estado: " + ejecucion.getEstado());
+                System.out.println("Duración: " + ejecucion.getDuracion() + " ms");
+                System.out.println("Código de salida: " + ejecucion.getCodigoSalida());
+
+                // Recuperar stdout y cerrar el flujo al finalizar.
+                System.out.println("----- STDOUT -----");
+
+                try (var lineasSalida = Files.lines(salidas.get(i), StandardCharsets.UTF_8)) {
+
+                    lineasSalida.forEach(System.out::println);
+                }
+
+                // Recuperar stderr y cerrar el flujo al finalizar.
+                System.out.println("----- STDERR -----");
+
+                try (var lineasError = Files.lines(errores.get(i), StandardCharsets.UTF_8)) {
+
+                    lineasError.forEach(System.err::println);
+                }
+            }
+
+        } catch (IOException e) {
+            System.err.println("Error durante la ejecución paralela: " + e.getMessage());
+            // Esperar a que terminen los procesos antes de liberar sus archivos.
+            finalizarProcesos(procesos);
+
+        } catch (InterruptedException e) {
+            System.err.println("La ejecución paralela fue interrumpida.");
+            // El métod o auxiliar restaura el estado de interrupción cuando corresponde.
+            finalizarProcesos(procesos);
+            Thread.currentThread().interrupt();
+
+        } finally {
+
+            // Eliminar los archivos temporales de salida.
+            for (Path salida : salidas) {
+                try {
+                    Files.deleteIfExists(salida);
+                } catch (IOException e) {
+                    System.err.println(
+                            "No se pudo eliminar el archivo temporal: "
+                                    + salida + " | Causa: " + e.getMessage()
+                    );
+                }
+            }
+
+            // Eliminar los archivos temporales de error.
+            for (Path error : errores) {
+                try {
+                    Files.deleteIfExists(error);
+                } catch (IOException e) {
+                    System.err.println(
+                            "No se pudo eliminar el archivo temporal: " + error
+                                    + " | Causa: " + e.getMessage()
+                    );
+                }
+            }
+        }
+
+        long duracionTotal = System.currentTimeMillis() - inicioTotal;
+
+        System.out.println("Duración total paralela: " + duracionTotal + " ms");
+
+        return duracionTotal;
+    }
+    /**
+     * Solicita la terminación de los procesos hijos.
+     * Espera un máximo de 2 segundos por proceso y, si alguno continúa activo, fuerza su terminación.
+     * @param procesos lista de procesos hijos iniciados.
+     */
+    private void finalizarProcesos(List<Process> procesos) {
+
+        boolean interrumpido = Thread.interrupted();
+
+        // 1. Solicitar la terminación de todos los procesos activos.
+        for (Process proceso : procesos) {
+            if (proceso.isAlive()) {
+                proceso.destroy();
+            }
+        }
+
+        // 2. Esperar su finalización con un tiempo máximo.
+        for (Process proceso : procesos) {
+            try {
+                if (!proceso.waitFor(2, TimeUnit.SECONDS)) {
+
+                    // Forzar la terminación si sigue activo.
+                    proceso.destroyForcibly();
+
+                    // Esperar a que termine realmente.
+                    proceso.waitFor();
+                }
+
+            } catch (InterruptedException e) {
+
+                interrumpido = true;
+
+                // Forzar la terminación del proceso.
+                proceso.destroyForcibly();
+
+                // Esperar a que finalice, conservando después
+                // el estado de interrupción.
+                boolean finalizado = false;
+
+                while (!finalizado) {
+                    try {
+                        proceso.waitFor();
+                        finalizado = true;
+                    } catch (InterruptedException nuevaInterrupcion) {
+                        interrumpido = true;
+                    }
+                }
+            }
+        }
+        // Cerrar los flujos asociados a los procesos hijos.
+        for (Process proceso : procesos) {
+            try {
+                proceso.getOutputStream().close();
+                proceso.getInputStream().close();
+                proceso.getErrorStream().close();
+            } catch (IOException e) {
+                System.err.println(
+                        "Error al cerrar los flujos del proceso "
+                                + proceso.pid() + ": " + e.getMessage()
+                );
+            }
+        }
+
+        // 3. Restaurar el estado de interrupción original.
+        if (interrumpido) {
+            Thread.currentThread().interrupt();
+        }
+    }
 }
-
-
