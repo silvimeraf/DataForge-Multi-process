@@ -1,2 +1,0 @@
-Hola mundo, estamos probando java en DataForge.
-JavaFX es genial para crear interfaces de procesos.

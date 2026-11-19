@@ -29,4 +29,11 @@ public class ConfiguracionProceso {
         return palabra;
     }
 
+    public void setRuta(String ruta) {
+        this.ruta = ruta;
+    }
+
+    public void setPalabra(String palabra) {
+        this.palabra = palabra;
+    }
 }
