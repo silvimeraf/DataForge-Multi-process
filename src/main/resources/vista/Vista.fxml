@@ -1,202 +1,155 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<BorderPane prefHeight="860.0" prefWidth="1360.0" stylesheets="@estilos.css"
+<BorderPane prefWidth="1280" prefHeight="820" stylesheets="@estilos.css"
             xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="com.dataforge.controlador.ControladorVista">
 
     <!-- CABECERA -->
     <top>
-        <HBox alignment="CENTER_LEFT" spacing="16.0" styleClass="cabecera">
-            <padding><Insets bottom="12.0" left="20.0" right="20.0" top="12.0"/></padding>
-            <VBox spacing="2.0">
-                <Label text="DATAFORGE" styleClass="titulo-principal"/>
-                <Label text="Motor visual de procesos · RA1 Programación de Servicios y Procesos" styleClass="subtitulo"/>
-            </VBox>
-            <Region HBox.hgrow="ALWAYS"/>
-            <Label fx:id="lblResumenCabecera" text="Listo para ejecutar procesos externos" styleClass="pildora-estado"/>
+        <HBox spacing="20" alignment="CENTER_LEFT" styleClass="cabecera">
+            <Label text="DATAFORGE - Gestor de Procesos (RA1)" styleClass="titulo"/>
+            <Label fx:id="lblResumenCabecera" text="Listo para ejecutar" styleClass="estado"/>
         </HBox>
     </top>
 
-    <!-- CONTENIDO PRINCIPAL -->
+    <!-- CENTRO -->
     <center>
-        <VBox spacing="12.0">
-            <padding><Insets bottom="12.0" left="18.0" right="18.0" top="12.0"/></padding>
+        <VBox spacing="12" style="-fx-padding: 15;">
 
-            <!-- 4 TARJETAS SUPERIORES -->
-            <HBox spacing="12.0" prefHeight="250.0">
+            <!-- FILA DE CONFIGURACIÓN (4 BLOQUES BÁSICOS) -->
+            <HBox spacing="12">
 
-                <!-- 1. SELECCIÓN DE TAREA -->
-                <VBox spacing="8.0" HBox.hgrow="ALWAYS" prefWidth="290.0" styleClass="tarjeta">
-                    <padding><Insets bottom="12.0" left="14.0" right="14.0" top="12.0"/></padding>
-                    <Label text="1. SELECCIÓN DE TAREA" styleClass="titulo-seccion"/>
-                    <Label text="Tipo de tarea:"/>
-                    <ComboBox fx:id="comboTareas" maxWidth="Infinity" styleClass="combo-box"/>
-                    <Label fx:id="lblDescripcionTarea" wrapText="true" VBox.vgrow="ALWAYS" styleClass="caja-info"
-                           text="Analiza un fichero o texto por stdin y devuelve estadísticas por stdout."/>
-                    <Button fx:id="btnLimpiarTabla" text="Limpiar historial" maxWidth="Infinity" styleClass="boton-secundario"/>
+                <!-- 1. TAREA -->
+                <VBox spacing="8" HBox.hgrow="ALWAYS" styleClass="panel">
+                    <Label text="1. TAREA" styleClass="subtitulo"/>
+                    <ComboBox fx:id="comboTareas" maxWidth="Infinity"/>
+                    <Label fx:id="lblDescripcionTarea" wrapText="true" text="Selecciona una tarea..."/>
+                    <Button fx:id="btnLimpiarTabla" text="Limpiar tabla" maxWidth="Infinity"/>
                 </VBox>
 
-                <!-- 2. CONFIGURACIÓN -->
-                <VBox spacing="8.0" HBox.hgrow="ALWAYS" prefWidth="360.0" styleClass="tarjeta">
-                    <padding><Insets bottom="12.0" left="14.0" right="14.0" top="12.0"/></padding>
-                    <Label text="2. CONFIGURACIÓN DE LA EJECUCIÓN" styleClass="titulo-seccion"/>
+                <!-- 2. PARÁMETROS -->
+                <VBox spacing="8" HBox.hgrow="ALWAYS" styleClass="panel">
+                    <Label text="2. PARÁMETROS" styleClass="subtitulo"/>
 
-                    <VBox fx:id="boxFicheroEntrada" spacing="4.0">
+                    <VBox fx:id="boxFicheroEntrada" spacing="5">
                         <Label text="Fichero de entrada:"/>
-                        <HBox spacing="6.0">
-                            <TextField fx:id="txtRutaFichero" HBox.hgrow="ALWAYS" promptText="Ej: prueba_textanalyzer.txt" styleClass="campo-texto"/>
-                            <Button fx:id="btnExaminarEntrada" text="Examinar..." styleClass="boton-secundario"/>
+                        <HBox spacing="5">
+                            <TextField fx:id="txtRutaFichero" HBox.hgrow="ALWAYS" promptText="archivo.txt"/>
+                            <Button fx:id="btnExaminarEntrada" text="Buscar"/>
                         </HBox>
                     </VBox>
 
-                    <VBox fx:id="boxTextoStdin" spacing="4.0" visible="false" managed="false">
-                        <Label text="Texto de entrada (enviado por getOutputStream() a stdin):"/>
-                        <TextArea fx:id="txtContenidoStdin" prefHeight="58.0" wrapText="true"
-                                  promptText="Escribe aquí el texto para stdin..."/>
+                    <VBox fx:id="boxTextoStdin" spacing="5" visible="false" managed="false">
+                        <Label text="Texto para stdin:"/>
+                        <TextArea fx:id="txtContenidoStdin" prefHeight="55" wrapText="true"/>
                     </VBox>
 
-                    <VBox fx:id="boxLimiteN" spacing="4.0" visible="false" managed="false">
-                        <Label text="Límite superior N (cálculo de primos desde 2 hasta N):"/>
-                        <TextField fx:id="txtLimiteN" text="200000" promptText="Ej: 200000" styleClass="campo-texto"/>
+                    <VBox fx:id="boxLimiteN" spacing="5" visible="false" managed="false">
+                        <Label text="Límite N (primos):"/>
+                        <TextField fx:id="txtLimiteN" text="200000"/>
                     </VBox>
 
-                    <VBox fx:id="boxPalabraBuscar" spacing="4.0">
+                    <VBox fx:id="boxPalabraBuscar" spacing="5">
                         <Label text="Palabra a buscar:"/>
-                        <TextField fx:id="txtPalabra" promptText="Ej: proceso" styleClass="campo-texto"/>
+                        <TextField fx:id="txtPalabra" promptText="proceso"/>
                     </VBox>
                 </VBox>
 
-                <!-- 3. MODO DE EJECUCIÓN -->
-                <VBox spacing="8.0" HBox.hgrow="ALWAYS" prefWidth="310.0" styleClass="tarjeta">
-                    <padding><Insets bottom="12.0" left="14.0" right="14.0" top="12.0"/></padding>
-                    <Label text="3. MODO DE EJECUCIÓN" styleClass="titulo-seccion"/>
-                    <Label text="Modo:"/>
-                    <ComboBox fx:id="comboModo" maxWidth="Infinity" styleClass="combo-box"/>
-
-                    <HBox alignment="CENTER_LEFT" spacing="8.0">
-                        <Label text="Número de procesos (1-100):"/>
-                        <Region HBox.hgrow="ALWAYS"/>
-                        <Spinner fx:id="spinnerProcesos" prefWidth="85.0" editable="true"/>
+                <!-- 3. EJECUCIÓN -->
+                <VBox spacing="8" HBox.hgrow="ALWAYS" styleClass="panel">
+                    <Label text="3. EJECUCIÓN" styleClass="subtitulo"/>
+                    <ComboBox fx:id="comboModo" maxWidth="Infinity"/>
+                    <HBox spacing="8" alignment="CENTER_LEFT">
+                        <Label text="Procesos (1-100):"/>
+                        <Spinner fx:id="spinnerProcesos" prefWidth="80" editable="true"/>
                     </HBox>
-
-                    <Region VBox.vgrow="ALWAYS"/>
-
-                    <Button fx:id="btnIniciar" text="▶ Iniciar ejecución" maxWidth="Infinity" prefHeight="34.0" styleClass="boton-primario"/>
-                    <Button fx:id="btnDetener" text="■ Detener ejecución (destroy)" maxWidth="Infinity" prefHeight="30.0" styleClass="boton-peligro"/>
+                    <Button fx:id="btnIniciar" text="▶ Iniciar" maxWidth="Infinity" styleClass="btn-iniciar"/>
+                    <Button fx:id="btnDetener" text="■ Detener (destroy)" maxWidth="Infinity" styleClass="btn-detener"/>
                 </VBox>
 
                 <!-- 4. REDIRECCIONES -->
-                <VBox spacing="6.0" HBox.hgrow="ALWAYS" prefWidth="350.0" styleClass="tarjeta">
-                    <padding><Insets bottom="12.0" left="14.0" right="14.0" top="12.0"/></padding>
-                    <Label text="4. REDIRECCIONES (ProcessBuilder.Redirect)" styleClass="titulo-seccion"/>
-
-                    <HBox alignment="CENTER_LEFT" spacing="6.0">
-                        <Label text="stdout:" prefWidth="48.0"/>
-                        <ComboBox fx:id="comboStdout" HBox.hgrow="ALWAYS" maxWidth="Infinity" styleClass="combo-box"/>
-                        <Button fx:id="btnFicheroStdout" text="..." disable="true" styleClass="boton-secundario"/>
+                <VBox spacing="6" HBox.hgrow="ALWAYS" styleClass="panel">
+                    <Label text="4. REDIRECCIONES" styleClass="subtitulo"/>
+                    <HBox spacing="5" alignment="CENTER_LEFT">
+                        <Label text="stdout:" prefWidth="45"/>
+                        <ComboBox fx:id="comboStdout" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+                        <Button fx:id="btnFicheroStdout" text="..." disable="true"/>
                     </HBox>
-                    <Label fx:id="lblRutaStdout" text="Destino stdout: Panel en DataForge (PIPE)" styleClass="subtitulo"/>
+                    <Label fx:id="lblRutaStdout" text="PIPE (DataForge)"/>
 
-                    <HBox alignment="CENTER_LEFT" spacing="6.0">
-                        <Label text="stderr:" prefWidth="48.0"/>
-                        <ComboBox fx:id="comboStderr" HBox.hgrow="ALWAYS" maxWidth="Infinity" styleClass="combo-box"/>
-                        <Button fx:id="btnFicheroStderr" text="..." disable="true" styleClass="boton-secundario"/>
+                    <HBox spacing="5" alignment="CENTER_LEFT">
+                        <Label text="stderr:" prefWidth="45"/>
+                        <ComboBox fx:id="comboStderr" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+                        <Button fx:id="btnFicheroStderr" text="..." disable="true"/>
                     </HBox>
-                    <Label fx:id="lblRutaStderr" text="Destino stderr: Panel en DataForge (PIPE)" styleClass="subtitulo"/>
+                    <Label fx:id="lblRutaStderr" text="PIPE (DataForge)"/>
 
-                    <HBox alignment="CENTER_LEFT" spacing="6.0">
-                        <Label text="stdin:" prefWidth="48.0"/>
-                        <ComboBox fx:id="comboStdin" HBox.hgrow="ALWAYS" maxWidth="Infinity" styleClass="combo-box"/>
-                        <Button fx:id="btnFicheroStdin" text="..." disable="true" styleClass="boton-secundario"/>
+                    <HBox spacing="5" alignment="CENTER_LEFT">
+                        <Label text="stdin:" prefWidth="45"/>
+                        <ComboBox fx:id="comboStdin" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+                        <Button fx:id="btnFicheroStdin" text="..." disable="true"/>
                     </HBox>
-                    <Label fx:id="lblRutaStdin" text="Origen stdin: Argumento fichero" styleClass="subtitulo"/>
+                    <Label fx:id="lblRutaStdin" text="Argumento fichero"/>
                 </VBox>
             </HBox>
 
-            <!-- 5. MONITOR DE PROCESOS -->
-            <VBox spacing="6.0" VBox.vgrow="ALWAYS" styleClass="tarjeta">
-                <padding><Insets bottom="10.0" left="14.0" right="14.0" top="10.0"/></padding>
-                <Label text="5. MONITOR DE PROCESOS (Selecciona una fila para ver su salida o detenerla)" styleClass="titulo-seccion"/>
+            <!-- TABLA DE PROCESOS -->
+            <VBox spacing="6" VBox.vgrow="ALWAYS" styleClass="panel">
+                <Label text="5. MONITOR DE PROCESOS" styleClass="subtitulo"/>
                 <TableView fx:id="tablaProcesos" VBox.vgrow="ALWAYS">
                     <columns>
-                        <TableColumn fx:id="colId" prefWidth="45.0" text="ID"/>
-                        <TableColumn fx:id="colPid" prefWidth="75.0" text="PID"/>
-                        <TableColumn fx:id="colTarea" prefWidth="155.0" text="Tarea"/>
-                        <TableColumn fx:id="colModo" prefWidth="95.0" text="Modo"/>
-                        <TableColumn fx:id="colParametros" prefWidth="290.0" text="Parámetros"/>
-                        <TableColumn fx:id="colInicio" prefWidth="105.0" text="Inicio"/>
-                        <TableColumn fx:id="colFin" prefWidth="105.0" text="Fin"/>
-                        <TableColumn fx:id="colDuracion" prefWidth="100.0" text="Tiempo (ms)"/>
-                        <TableColumn fx:id="colExitCode" prefWidth="100.0" text="Código salida"/>
-                        <TableColumn fx:id="colEstado" prefWidth="135.0" text="Estado"/>
+                        <TableColumn fx:id="colId" text="ID" prefWidth="45"/>
+                        <TableColumn fx:id="colPid" text="PID" prefWidth="75"/>
+                        <TableColumn fx:id="colTarea" text="Tarea" prefWidth="150"/>
+                        <TableColumn fx:id="colModo" text="Modo" prefWidth="95"/>
+                        <TableColumn fx:id="colParametros" text="Parámetros" prefWidth="280"/>
+                        <TableColumn fx:id="colInicio" text="Inicio" prefWidth="100"/>
+                        <TableColumn fx:id="colFin" text="Fin" prefWidth="100"/>
+                        <TableColumn fx:id="colDuracion" text="Tiempo (ms)" prefWidth="95"/>
+                        <TableColumn fx:id="colExitCode" text="Salida" prefWidth="75"/>
+                        <TableColumn fx:id="colEstado" text="Estado" prefWidth="130"/>
                     </columns>
                 </TableView>
             </VBox>
 
-            <!-- PANELES INFERIORES -->
-            <HBox spacing="12.0" prefHeight="210.0">
-
-                <!-- 6. STDOUT -->
-                <VBox spacing="6.0" HBox.hgrow="ALWAYS" prefWidth="440.0" styleClass="tarjeta">
-                    <padding><Insets bottom="10.0" left="12.0" right="12.0" top="10.0"/></padding>
-                    <HBox alignment="CENTER_LEFT">
-                        <Label text="6. SALIDA ESTÁNDAR (stdout)" styleClass="titulo-seccion"/>
-                        <Region HBox.hgrow="ALWAYS"/>
-                        <Button fx:id="btnLimpiarStdout" text="Limpiar" styleClass="boton-secundario"/>
+            <!-- SALIDAS Y RESUMEN -->
+            <SplitPane dividerPositions="0.38, 0.76" prefHeight="200">
+                <VBox spacing="5" styleClass="panel">
+                    <HBox spacing="10" alignment="CENTER_LEFT">
+                        <Label text="STDOUT" styleClass="subtitulo"/>
+                        <Button fx:id="btnLimpiarStdout" text="Limpiar"/>
                     </HBox>
-                    <TextArea fx:id="txtStdout" editable="false" VBox.vgrow="ALWAYS" wrapText="true" styleClass="consola-stdout"/>
+                    <TextArea fx:id="txtStdout" editable="false" VBox.vgrow="ALWAYS" wrapText="true"/>
                 </VBox>
 
-                <!-- 7. STDERR -->
-                <VBox spacing="6.0" HBox.hgrow="ALWAYS" prefWidth="440.0" styleClass="tarjeta">
-                    <padding><Insets bottom="10.0" left="12.0" right="12.0" top="10.0"/></padding>
-                    <HBox alignment="CENTER_LEFT">
-                        <Label text="7. SALIDA DE ERROR (stderr)" styleClass="titulo-error"/>
-                        <Region HBox.hgrow="ALWAYS"/>
-                        <Button fx:id="btnLimpiarStderr" text="Limpiar" styleClass="boton-secundario"/>
+                <VBox spacing="5" styleClass="panel">
+                    <HBox spacing="10" alignment="CENTER_LEFT">
+                        <Label text="STDERR" styleClass="subtitulo"/>
+                        <Button fx:id="btnLimpiarStderr" text="Limpiar"/>
                     </HBox>
-                    <TextArea fx:id="txtStderr" editable="false" VBox.vgrow="ALWAYS" wrapText="true" styleClass="consola-stderr"/>
+                    <TextArea fx:id="txtStderr" editable="false" VBox.vgrow="ALWAYS" wrapText="true"/>
                 </VBox>
 
-                <!-- 8. INFORMACIÓN GENERAL -->
-                <VBox spacing="8.0" prefWidth="360.0" styleClass="tarjeta">
-                    <padding><Insets bottom="10.0" left="14.0" right="14.0" top="10.0"/></padding>
-                    <Label text="8. INFORMACIÓN GENERAL" styleClass="titulo-seccion"/>
-
-                    <GridPane hgap="10.0" vgap="4.0">
-                        <Label text="Procesos ejecutados:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
-                        <Label fx:id="lblTotalEjecutados" text="0" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
-
-                        <Label text="Procesos finalizados:" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
-                        <Label fx:id="lblFinalizados" text="0" GridPane.columnIndex="1" GridPane.rowIndex="1"/>
-
-                        <Label text="Procesos en ejecución:" GridPane.columnIndex="0" GridPane.rowIndex="2"/>
-                        <Label fx:id="lblEnEjecucion" text="0" GridPane.columnIndex="1" GridPane.rowIndex="2"/>
-
-                        <Label text="Procesos con error / cancelados:" GridPane.columnIndex="0" GridPane.rowIndex="3"/>
-                        <Label fx:id="lblConError" text="0" GridPane.columnIndex="1" GridPane.rowIndex="3"/>
-                    </GridPane>
-
-                    <Separator/>
-
-                    <Label fx:id="lblTiempoLote" text="Tiempo total (lote): 0 ms" style="-fx-font-weight: bold;"/>
-                    <ProgressBar fx:id="barraProgreso" maxWidth="Infinity" progress="0.0" style="-fx-accent: #606c5a;"/>
+                <VBox spacing="6" styleClass="panel">
+                    <Label text="RESUMEN" styleClass="subtitulo"/>
+                    <HBox spacing="5"><Label text="Ejecutados:"/><Label fx:id="lblTotalEjecutados" text="0"/></HBox>
+                    <HBox spacing="5"><Label text="Finalizados:"/><Label fx:id="lblFinalizados" text="0"/></HBox>
+                    <HBox spacing="5"><Label text="En ejecución:"/><Label fx:id="lblEnEjecucion" text="0"/></HBox>
+                    <HBox spacing="5"><Label text="Errores/Cancelados:"/><Label fx:id="lblConError" text="0"/></HBox>
+                    <Label fx:id="lblTiempoLote" text="Tiempo total: 0 ms"/>
+                    <ProgressBar fx:id="barraProgreso" maxWidth="Infinity" progress="0.0"/>
                 </VBox>
-            </HBox>
+            </SplitPane>
         </VBox>
     </center>
 
     <!-- PIE -->
     <bottom>
-        <HBox alignment="CENTER_LEFT" spacing="20.0" styleClass="pie">
-            <padding><Insets bottom="6.0" left="20.0" right="20.0" top="6.0"/></padding>
-            <Label fx:id="lblEstadoBarra" text="Modo: Individual | Procesos: 1" styleClass="subtitulo"/>
-            <Region HBox.hgrow="ALWAYS"/>
-            <Label text="DataForge · ProcessBuilder + Process" styleClass="subtitulo"/>
+        <HBox styleClass="cabecera">
+            <Label fx:id="lblEstadoBarra" text="Modo: Individual | Procesos: 1"/>
         </HBox>
     </bottom>
 </BorderPane>
