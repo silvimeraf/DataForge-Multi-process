@@ -1,0 +1,4 @@
+Java permite crear aplicaciones.
+Java permite ejecutar procesos.
+Los procesos pueden trabajar con archivos.
+Java es un lenguaje de programación.

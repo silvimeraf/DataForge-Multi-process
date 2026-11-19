@@ -37,14 +37,3 @@ build/
 
 ### Mac OS ###
 .DS_Store
-
-# Configuración local de IntelliJ
-.idea/
-
-# Archivos compilados y temporales
-out/
-*.log
-*.tmp
-
-# Windows
-Thumbs.db

@@ -1,0 +1,5 @@
+Java permite crear procesos.
+DataForge ejecuta procesos Java.
+Un proceso puede analizar texto.
+Java permite ejecutar varios procesos.
+DataForge utiliza Java.
