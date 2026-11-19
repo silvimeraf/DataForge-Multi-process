@@ -1,35 +1,43 @@
-/* Fondo general gris azulado suave (punto medio, cero reflejos) */
+/* Fondo general gris azulado suave */
 .root {
     -fx-background-color: #dce3ec;
     -fx-font-family: "Segoe UI", sans-serif;
     -fx-font-size: 12px;
 }
 
-/* Cabecera y pie en tono pizarra suave */
-.cabecera, .pie {
+/* Cabecera y pie */
+.cabecera {
     -fx-background-color: #cfd8e3;
+    -fx-padding: 12 20 12 20;
     -fx-border-color: #bcc7d6;
     -fx-border-width: 0 0 1 0;
 }
 
-.pie {
-    -fx-border-width: 1 0 0 0;
-}
-
-.titulo-principal {
+.titulo {
     -fx-text-fill: #1e293b;
     -fx-font-size: 18px;
     -fx-font-weight: bold;
 }
 
 .subtitulo {
-    -fx-text-fill: #526278;
+    -fx-text-fill: #2c5282;
+    -fx-font-weight: bold;
     -fx-font-size: 11px;
 }
 
-/* Tarjetas en gris perla suave */
-.tarjeta {
+/* Píldora superior de estado */
+.estado {
+    -fx-background-color: #3b6998;
+    -fx-text-fill: #ffffff;
+    -fx-background-radius: 16;
+    -fx-padding: 6 14 6 14;
+    -fx-font-weight: bold;
+}
+
+/* Tarjetas principales */
+.panel {
     -fx-background-color: #eef2f7;
+    -fx-padding: 12;
     -fx-background-radius: 10;
     -fx-border-color: #c5d0de;
     -fx-border-radius: 10;
@@ -39,60 +47,8 @@
     -fx-text-fill: #2c384a;
 }
 
-.titulo-seccion {
-    -fx-text-fill: #2c5282;
-    -fx-font-weight: bold;
-    -fx-font-size: 11px;
-}
-
-.titulo-error {
-    -fx-text-fill: #9b2c2c;
-    -fx-font-weight: bold;
-    -fx-font-size: 11px;
-}
-
-.caja-info {
-    -fx-background-color: #e2e8f0;
-    -fx-text-fill: #3d4c61;
-    -fx-background-radius: 8;
-    -fx-padding: 8;
-    -fx-font-size: 11px;
-}
-
-.pildora-estado {
-    -fx-background-color: #3b6998;
-    -fx-text-fill: #ffffff;
-    -fx-background-radius: 16;
-    -fx-padding: 6 14;
-    -fx-font-weight: bold;
-}
-
 /* Botones */
-.boton-primario {
-    -fx-background-color: #3b6998;
-    -fx-text-fill: #ffffff;
-    -fx-background-radius: 16;
-    -fx-font-weight: bold;
-    -fx-cursor: hand;
-}
-.boton-primario:hover {
-    -fx-background-color: #2f557d;
-}
-
-.boton-peligro {
-    -fx-background-color: #e2d5d5;
-    -fx-text-fill: #8c2d2d;
-    -fx-border-color: #cca9a9;
-    -fx-border-radius: 16;
-    -fx-background-radius: 16;
-    -fx-font-weight: bold;
-    -fx-cursor: hand;
-}
-.boton-peligro:hover {
-    -fx-background-color: #d6c1c1;
-}
-
-.boton-secundario {
+.button {
     -fx-background-color: #dce3ec;
     -fx-text-fill: #2c384a;
     -fx-border-color: #bcc7d6;
@@ -100,12 +56,37 @@
     -fx-background-radius: 8;
     -fx-cursor: hand;
 }
-.boton-secundario:hover {
+.button:hover {
     -fx-background-color: #cfd8e3;
 }
 
+.btn-iniciar {
+    -fx-background-color: #3b6998;
+    -fx-text-fill: #ffffff;
+    -fx-border-color: transparent;
+    -fx-background-radius: 16;
+    -fx-font-weight: bold;
+    -fx-padding: 8 12 8 12;
+}
+.btn-iniciar:hover {
+    -fx-background-color: #2f557d;
+}
+
+.btn-detener {
+    -fx-background-color: #e2d5d5;
+    -fx-text-fill: #8c2d2d;
+    -fx-border-color: #cca9a9;
+    -fx-border-radius: 16;
+    -fx-background-radius: 16;
+    -fx-font-weight: bold;
+    -fx-padding: 6 12 6 12;
+}
+.btn-detener:hover {
+    -fx-background-color: #d6c1c1;
+}
+
 /* Inputs y desplegables */
-.campo-texto, .combo-box, .spinner {
+.text-field, .combo-box, .spinner {
     -fx-background-color: #f8fafc;
     -fx-text-fill: #1e293b;
     -fx-border-color: #bcc7d6;
@@ -148,19 +129,23 @@
     -fx-border-color: transparent;
 }
 
-/* Consolas inferiores suaves */
-.consola-stdout .content {
+/* Áreas de texto (stdout / stderr) */
+.text-area .content {
     -fx-background-color: #e6ecf2;
 }
-.consola-stdout {
+.text-area {
     -fx-text-fill: #1e293b;
     -fx-font-family: "Consolas", monospace;
+    -fx-border-color: #bcc7d6;
+    -fx-border-radius: 6;
 }
 
-.consola-stderr .content {
-    -fx-background-color: #f2e6e6;
+/* SplitPane sin bordes grises feos */
+.split-pane {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
 }
-.consola-stderr {
-    -fx-text-fill: #8c2d2d;
-    -fx-font-family: "Consolas", monospace;
+.split-pane-divider {
+    -fx-background-color: #dce3ec;
+    -fx-padding: 0 4 0 4;
 }
