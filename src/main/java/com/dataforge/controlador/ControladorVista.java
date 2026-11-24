@@ -1,7 +1,7 @@
 package com.dataforge.controlador;
 
 import com.dataforge.modelo.ProcesoInfo;
-import com.dataforge.servicios.ServicioEjecucion;
+import com.dataforge.servicios.ServicioRendimiento;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.collections.FXCollections;
@@ -52,6 +52,7 @@ public class ControladorVista {
     @FXML private Spinner<Integer> spinnerProcesos;
     @FXML private Button btnIniciar;
     @FXML private Button btnDetener;
+    @FXML private Button btnBenchmark;
 
     // Zona 4: Redirecciones
     @FXML private ComboBox<String> comboStdout;
@@ -117,6 +118,7 @@ public class ControladorVista {
     private Timeline vigilanteProcesos;
     private long inicioLoteMs = 0L;
     private int totalLoteActual = 0;
+    private final ServicioRendimiento servicioRendimiento = new ServicioRendimiento();
 
     @FXML
     public void initialize() {
@@ -212,6 +214,8 @@ public class ControladorVista {
         // 5. Botones de acción
         btnIniciar.setOnAction(e -> ejecutarAccionPrincipal());
         btnDetener.setOnAction(e -> detenerProcesoSeleccionado());
+        btnBenchmark.setOnAction(e -> ejecutarExperimentoRendimiento());
+
         btnLimpiarStdout.setOnAction(e -> txtStdout.clear());
         btnLimpiarStderr.setOnAction(e -> txtStderr.clear());
         btnLimpiarTabla.setOnAction(e -> {
@@ -349,6 +353,74 @@ public class ControladorVista {
             List<String> primero = colaPendienteSecuencial.remove(0);
             lanzarUnProcesoAsincrono(primero, tarea, modo);
         }
+    }
+    private void ejecutarExperimentoRendimiento() {
+        int limiteN;
+        try {
+            limiteN = Integer.parseInt(txtLimiteN.getText().trim());
+            if (limiteN < 2) {
+                txtStderr.setText("[ERROR] El límite N para Prime Benchmark debe ser mayor o igual que 2.\n");
+                return;
+            }
+        } catch (NumberFormatException ex) {
+            txtStderr.setText("[ERROR] Introduce un número entero válido en Límite N antes de lanzar el experimento.\n");
+            return;
+        }
+
+        btnIniciar.setDisable(true);
+        btnBenchmark.setDisable(true);
+        txtStdout.setText("Ejecutando experimento de escalabilidad con N=" + limiteN + "...\n");
+
+        int[] procesosAcumulados = {0};
+        lblTotalEjecutados.setText("0");
+        lblFinalizados.setText("0");
+        lblEnEjecucion.setText("0");
+        lblConError.setText("0");
+        barraProgreso.setProgress(0.0);
+
+        List<Integer> lotes = new ArrayList<>(ServicioRendimiento.CANTIDADES_EXPERIMENTO_POR_DEFECTO);
+        List<ServicioRendimiento.ResultadoComparativa> resultados = new ArrayList<>();
+        long inicioGlobal = System.currentTimeMillis();
+
+        Timeline ejecutorLotes = new Timeline();
+        ejecutorLotes.setCycleCount(lotes.size());
+
+        final int[] indice = {0};
+        ejecutorLotes.getKeyFrames().add(new KeyFrame(Duration.millis(50), ev -> {
+            int cantidad = lotes.get(indice[0]++);
+            lblResumenCabecera.setText("Benchmark N=" + limiteN + " | Lote de " + cantidad + " proceso(s)...");
+            ServicioRendimiento.ResultadoComparativa res = servicioRendimiento.compararModoPrimeBenchmark(
+                    cantidad,
+                    limiteN,
+                    linea -> {}
+            );
+            resultados.add(res);
+            txtStdout.setText("Lote completado: " + cantidad + " procesos (Sec: "
+                    + res.getTiempoSecuencialMs() + " ms | Par: "
+                    + res.getTiempoParaleloMs() + " ms)\n\n"
+                    + servicioRendimiento.formatearTablaResultados(resultados));
+
+            procesosAcumulados[0] += cantidad * 2;
+            lblTotalEjecutados.setText(String.valueOf(procesosAcumulados[0]));
+            lblFinalizados.setText(String.valueOf(procesosAcumulados[0]));
+            lblTiempoLote.setText("Tiempo acumulado: " + (System.currentTimeMillis() - inicioGlobal) + " ms");
+            barraProgreso.setProgress((double) indice[0] / lotes.size());
+        }));
+
+        ejecutorLotes.setOnFinished(ev -> {
+            long totalMs = System.currentTimeMillis() - inicioGlobal;
+            lblTotalEjecutados.setText(procesosAcumulados[0] + " (6 lotes)");
+            lblFinalizados.setText(String.valueOf(procesosAcumulados[0]));
+            lblEnEjecucion.setText("0");
+            lblTiempoLote.setText("Tiempo total (experimento): " + totalMs + " ms");
+            barraProgreso.setProgress(1.0);
+            lblResumenCabecera.setText("Experimento finalizado en " + totalMs + " ms");
+            txtStdout.setText(servicioRendimiento.formatearTablaResultados(resultados));
+            btnIniciar.setDisable(false);
+            btnBenchmark.setDisable(false);
+        });
+
+        ejecutorLotes.play();
     }
 
     private void lanzarUnProcesoAsincrono(List<String> comando, String tarea, String modo) {

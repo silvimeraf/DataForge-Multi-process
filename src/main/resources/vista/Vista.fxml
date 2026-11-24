@@ -68,7 +68,7 @@
                     </HBox>
                     <Button fx:id="btnIniciar" text="▶ Iniciar" maxWidth="Infinity" styleClass="btn-iniciar"/>
                     <Button fx:id="btnDetener" text="■ Detener (destroy)" maxWidth="Infinity" styleClass="btn-detener"/>
-                </VBox>
+                    <Button fx:id="btnBenchmark" text="⚡ Experimento N" maxWidth="Infinity" styleClass="btn-benchmark"/>                </VBox>
 
                 <!-- 4. REDIRECCIONES -->
                 <VBox spacing="6" HBox.hgrow="ALWAYS" styleClass="panel">
@@ -122,8 +122,7 @@
                         <Label text="STDOUT" styleClass="subtitulo"/>
                         <Button fx:id="btnLimpiarStdout" text="Limpiar"/>
                     </HBox>
-                    <TextArea fx:id="txtStdout" editable="false" VBox.vgrow="ALWAYS" wrapText="true"/>
-                </VBox>
+                    <TextArea fx:id="txtStdout" editable="false" VBox.vgrow="ALWAYS" wrapText="false"/>                </VBox>
 
                 <VBox spacing="5" styleClass="panel">
                     <HBox spacing="10" alignment="CENTER_LEFT">
