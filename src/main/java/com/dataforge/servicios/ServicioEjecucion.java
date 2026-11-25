@@ -1,18 +1,13 @@
 package com.dataforge.servicios;
 
-import com.dataforge.modelo.ConfiguracionProceso;
+import com.dataforge.modelo.ProcesoInfo;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
-import com.dataforge.modelo.ProcesoInfo;
-import java.time.Instant;
-import java.time.LocalTime;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * Servicio encargado de iniciar y gestionar procesos externos.
@@ -31,27 +26,22 @@ public class ServicioEjecucion {
     // Lista para almacenar los procesos activos (necesaria para el método destroy())
     private static final List<Process> procesosActivos = new ArrayList<>();
 
-    /**
-     * Ejecuta un proceso individual notificando el PID y las líneas de salida en tiempo real
-     * hacia la interfaz gráfica mediante funciones de retrollamada (Consumer).
-     *
-     * @param configuracion    Configuración con la ruta y parámetros de la tarea.
-     * @param consumidorSalida Callback para enviar cada línea de texto leída al TextArea de la UI.
-     * @param consumidorPid    Callback para notificar el PID real del proceso al iniciarse.
-     * @return El código de salida (Exit Code) del proceso, o -1 en caso de error.
-     */
-    public int iniciar(ConfiguracionProceso configuracion, Consumer<String> consumidorSalida, Consumer<Long> consumidorPid) {
-        List<String> comando = List.of(
-                "java",
-                "-Dfile.encoding=UTF-8", // Forzar codificación UTF-8 para evitar caracteres extraños
-                "-cp",
-                System.getProperty("java.class.path"),
-                "com.dataforge.tareas.TextAnalyzer",
-                configuracion.getRuta(),
-                configuracion.getPalabra()
-        );
-        return ejecutarIndividualProceso(comando, consumidorSalida, consumidorPid);
+    // Estructuras para vigilar procesos activos mediante Timeline de JavaFX (sin Thread)
+    public static class ProcesoEnCurso {
+        public Process proceso;
+        public ProcesoInfo info;
+        public long tiempoInicioMs;
+        public boolean canceladoPorUsuario = false;
+        public File tempStdout;
+        public File tempStderr;
+        public String modoStdout;
+        public String modoStderr;
     }
+
+    private final List<ProcesoEnCurso> procesosVigilados = new ArrayList<>();
+    private final List<List<String>> colaPendienteSecuencial = new ArrayList<>();
+    private final ServicioComunicacion servicioComunicacion = new ServicioComunicacion();
+    private final ServicioMonitorizacion servicioMonitorizacion = new ServicioMonitorizacion();
 
     /**
      * Ejecución individual interna que gestiona ProcessBuilder, PID, lectura de flujos y waitFor().
@@ -170,36 +160,6 @@ public class ServicioEjecucion {
     }
 
     /**
-     * Método para detener todos los procesos activos mediante destroy() (Requisito del RA1).
-     */
-    public static void detenerProcesosActivos() {
-        synchronized (procesosActivos) {
-            for (Process p : procesosActivos) {
-                if (p.isAlive()) {
-                    p.destroy();
-                    System.out.println("Proceso con PID " + p.pid() + " detenido por el usuario.");
-                }
-            }
-        }
-    }
-    // Estructuras para vigilar procesos activos mediante Timeline de JavaFX (sin Thread)
-    public static class ProcesoEnCurso {
-        public Process proceso;
-        public ProcesoInfo info;
-        public long tiempoInicioMs;
-        public boolean canceladoPorUsuario = false;
-        public File tempStdout;
-        public File tempStderr;
-        public String modoStdout;
-        public String modoStderr;
-    }
-
-    private final List<ProcesoEnCurso> procesosVigilados = new ArrayList<>();
-    private final List<List<String>> colaPendienteSecuencial = new ArrayList<>();
-    private final DateTimeFormatter formatoHora = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
-    private final ServicioComunicacion servicioComunicacion = new ServicioComunicacion();
-
-    /**
      * Construye la lista de comandos para Individual, Secuencial o Paralelo.
      */
     public List<List<String>> construirComandos(String tarea, int numProcesos, String limite,
@@ -275,17 +235,8 @@ public class ServicioEjecucion {
                 resumenParams = "N=" + comando.get(comando.size() - 1);
             }
 
-            ProcesoInfo info = new ProcesoInfo(
-                    idProceso,
-                    proceso.pid(),
-                    tarea,
-                    modo,
-                    resumenParams,
-                    LocalTime.ofInstant(Instant.ofEpochMilli(ahora), ZoneId.systemDefault()).format(formatoHora),
-                    "-",
-                    "-",
-                    "-",
-                    "Ejecutando"
+            ProcesoInfo info = servicioMonitorizacion.registrarInicio(
+                    idProceso, proceso, tarea, modo, resumenParams, ahora
             );
 
             ProcesoEnCurso pc = new ProcesoEnCurso();
@@ -320,19 +271,10 @@ public class ServicioEjecucion {
                 if (!pc.proceso.isAlive() || pc.proceso.waitFor(2, TimeUnit.MILLISECONDS)) {
                     int exitCode = pc.proceso.waitFor();
                     long finMs = System.currentTimeMillis();
-                    long duracion = finMs - pc.tiempoInicioMs;
 
-                    pc.info.setFin(LocalTime.ofInstant(Instant.ofEpochMilli(finMs), ZoneId.systemDefault()).format(formatoHora));
-                    pc.info.setDuracion(String.valueOf(duracion));
-                    pc.info.setExitCode(String.valueOf(exitCode));
-
-                    if (pc.canceladoPorUsuario) {
-                        pc.info.setEstado("Cancelado (destroy)");
-                    } else if (exitCode == 0) {
-                        pc.info.setEstado("Finalizado");
-                    } else {
-                        pc.info.setEstado("Error");
-                    }
+                    servicioMonitorizacion.registrarFinalizacion(
+                            pc.info, pc.tiempoInicioMs, finMs, exitCode, pc.canceladoPorUsuario
+                    );
 
                     // Recoger stdout según redirección elegida
                     String outTexto;
