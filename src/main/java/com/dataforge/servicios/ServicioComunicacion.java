@@ -174,42 +174,6 @@ public class ServicioComunicacion {
     }
 
     /**
-     * Ejecuta una tubería (Pipeline) conectando la salida de un proceso
-     * directamente con la entrada de otro utilizando ProcessBuilder.startPipeline().
-     * Ejemplo: Prime Benchmark -> Text Analyzer
-     */
-    public void ejecutarPipeline(List<String> comando1, List<String> comando2) {
-        try {
-            ProcessBuilder pb1 = new ProcessBuilder(comando1);
-            ProcessBuilder pb2 = new ProcessBuilder(comando2);
-
-            System.out.println("--- INICIANDO PIPELINE DE PROCESOS ---");
-
-            // Lanzar la tubería utilizando la API nativa de Java
-            List<Process> procesos = ProcessBuilder.startPipeline(List.of(pb1, pb2));
-
-            for (Process p : procesos) {
-                System.out.println("Proceso en pipeline iniciado con PID: " + p.pid());
-            }
-
-            // Esperar a que ambos procesos terminen
-            for (int i = 0; i < procesos.size(); i++) {
-                Process p = procesos.get(i);
-                int codigo = p.waitFor();
-                System.out.println("Etapa " + (i + 1) + " (PID " + p.pid() + ") finalizada con código: " + codigo);
-            }
-
-            System.out.println("--- PIPELINE FINALIZADO CORRECTAMENTE ---");
-
-        } catch (IOException | InterruptedException e) {
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            System.err.println("Error al ejecutar el pipeline de procesos: " + e.getMessage());
-        }
-    }
-
-    /**
      * Lee un flujo de un proceso hasta su final (EOF) y lo devuelve como texto UTF-8.
      *
      * @param flujo flujo del proceso (getInputStream() o getErrorStream()).

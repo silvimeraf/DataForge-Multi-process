@@ -1,0 +1,6 @@
+===== RESULTADO TEXT ANALYZER =====
+Líneas: 4
+Palabras: 20
+Caracteres: 141
+Palabra más larga: aplicaciones.
+Apariciones de 'proceso': 0
