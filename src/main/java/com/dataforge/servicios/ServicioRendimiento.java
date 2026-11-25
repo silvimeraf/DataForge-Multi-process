@@ -2,21 +2,23 @@ package com.dataforge.servicios;
 
 import com.dataforge.modelo.EjecucionProceso;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
- * Servicio encargado de medir, comparar y estructurar métricas de rendimiento
- * al ejecutar lotes de procesos (por ejemplo, PrimeBenchmark) en modo secuencial
- * frente a paralelo utilizando {@link ServicioEjecucion} (sin hilos manuales).
- * Pertenece a la capa Servicios.
+ - Servicio encargado de medir, comparar y estructurar métricas de rendimiento
+ - al ejecutar lotes de procesos (por ejemplo, PrimeBenchmark) en modo secuencial
+ - frente a paralelo utilizando {@link ServicioEjecucion} (sin hilos manuales).
+ - Pertenece a la capa Servicios.
  */
 public class ServicioRendimiento {
 
     /**
-     * Tamaños de lote estándar del experimento de escalabilidad exigido en RA1[cite: 33].
+     - Tamaños de lote estándar del experimento de escalabilidad exigido en RA1.
      */
     public static final List<Integer> CANTIDADES_EXPERIMENTO_POR_DEFECTO =
             List.of(1, 5, 10, 20, 50, 100);
@@ -25,16 +27,16 @@ public class ServicioRendimiento {
     private final ServicioEjecucion servicioEjecucion;
 
     /**
-     * Crea una instancia de {@code ServicioRendimiento} con un {@link ServicioEjecucion} por defecto.
+     - Crea una instancia de {@code ServicioRendimiento} con un {@link ServicioEjecucion} por defecto.
      */
     public ServicioRendimiento() {
         this(new ServicioEjecucion());
     }
 
     /**
-     * Crea una instancia de {@code ServicioRendimiento} inyectando el {@link ServicioEjecucion} a utilizar.
+     - Crea una instancia de {@code ServicioRendimiento} inyectando el {@link ServicioEjecucion} a utilizar.
      *
-     * @param servicioEjecucion servicio responsable de ejecutar los lotes de procesos.
+     - @param servicioEjecucion servicio responsable de ejecutar los lotes de procesos.
      */
     public ServicioRendimiento(ServicioEjecucion servicioEjecucion) {
         // Garantiza que el servicio de ejecución esté disponible antes de medir tiempos.
@@ -42,9 +44,77 @@ public class ServicioRendimiento {
                 servicioEjecucion, "servicioEjecucion no puede ser nulo");
     }
 
+    public static class LoteNoBloqueante {
+        public final List<List<String>> colaComandos;
+        public final List<Process> procesosActivos = new ArrayList<>();
+        public final long inicioMs;
+
+        public LoteNoBloqueante(List<List<String>> colaComandos, long inicioMs) {
+            this.colaComandos = new ArrayList<>(colaComandos);
+            this.inicioMs = inicioMs;
+        }
+    }
+
+    public LoteNoBloqueante iniciarLoteSecuencialNoBloqueante(int cantidadProcesos, int limitePrimos) {
+        List<List<String>> comandos = construirComandosPrimeBenchmark(cantidadProcesos, limitePrimos);
+        LoteNoBloqueante lote = new LoteNoBloqueante(comandos, System.currentTimeMillis());
+        if (!lote.colaComandos.isEmpty()) {
+            lanzarSiguienteProceso(lote);
+        }
+        return lote;
+    }
+
+    public LoteNoBloqueante iniciarLoteParaleloNoBloqueante(int cantidadProcesos, int limitePrimos) {
+        List<List<String>> comandos = construirComandosPrimeBenchmark(cantidadProcesos, limitePrimos);
+        LoteNoBloqueante lote = new LoteNoBloqueante(List.of(), System.currentTimeMillis());
+        for (List<String> cmd : comandos) {
+            try {
+                ProcessBuilder pb = new ProcessBuilder(cmd);
+                pb.redirectErrorStream(true);
+                lote.procesosActivos.add(pb.start());
+            } catch (IOException ignored) {
+            }
+        }
+        return lote;
+    }
+
+    public boolean avanzarLoteNoBloqueante(LoteNoBloqueante lote, boolean secuencial) {
+        if (lote == null) {
+            return true;
+        }
+        List<Process> terminados = new ArrayList<>();
+        for (Process p : lote.procesosActivos) {
+            try {
+                if (!p.isAlive() || p.waitFor(5, TimeUnit.MILLISECONDS)) {
+                    terminados.add(p);
+                }
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                terminados.add(p);
+            }
+        }
+        lote.procesosActivos.removeAll(terminados);
+
+        if (secuencial && lote.procesosActivos.isEmpty() && !lote.colaComandos.isEmpty()) {
+            lanzarSiguienteProceso(lote);
+        }
+
+        return lote.procesosActivos.isEmpty() && lote.colaComandos.isEmpty();
+    }
+
+    private void lanzarSiguienteProceso(LoteNoBloqueante lote) {
+        List<String> siguiente = lote.colaComandos.remove(0);
+        try {
+            ProcessBuilder pb = new ProcessBuilder(siguiente);
+            pb.redirectErrorStream(true);
+            lote.procesosActivos.add(pb.start());
+        } catch (IOException ignored) {
+        }
+    }
+
     /**
-     * Estructura de datos que almacena los tiempos totales y métricas derivadas
-     * al comparar una misma cantidad de procesos en modo secuencial y paralelo.
+     - Estructura de datos que almacena los tiempos totales y métricas derivadas
+     - al comparar una misma cantidad de procesos en modo secuencial y paralelo.
      */
     public static class ResultadoComparativa {
         private final int cantidadProcesos;
@@ -53,12 +123,12 @@ public class ServicioRendimiento {
         private final long tiempoParaleloMs;
 
         /**
-         * Construye un resultado comparativo para una cantidad concreta de procesos y un límite {@code N}.
+         - Construye un resultado comparativo para una cantidad concreta de procesos y un límite {@code N}.
          *
-         * @param cantidadProcesos   número de instancias de proceso ejecutadas en cada modo.
-         * @param limitePrimos       límite superior {@code N} pasado a {@code PrimeBenchmark}.
-         * @param tiempoSecuencialMs duración total del lote en modo secuencial (en milisegundos).
-         * @param tiempoParaleloMs   duración total del lote en modo paralelo (en milisegundos).
+         - @param cantidadProcesos   número de instancias de proceso ejecutadas en cada modo.
+         - @param limitePrimos       límite superior {@code N} pasado a {@code PrimeBenchmark}.
+         - @param tiempoSecuencialMs duración total del lote en modo secuencial (en milisegundos).
+         - @param tiempoParaleloMs   duración total del lote en modo paralelo (en milisegundos).
          */
         public ResultadoComparativa(int cantidadProcesos,
                                     int limitePrimos,
@@ -71,48 +141,48 @@ public class ServicioRendimiento {
         }
 
         /**
-         * @return número de procesos del lote comparado.
+         - @return número de procesos del lote comparado.
          */
         public int getCantidadProcesos() {
             return cantidadProcesos;
         }
 
         /**
-         * @return límite superior {@code N} utilizado en {@code PrimeBenchmark}.
+         - @return límite superior {@code N} utilizado en {@code PrimeBenchmark}.
          */
         public int getLimitePrimos() {
             return limitePrimos;
         }
 
         /**
-         * @return duración total en milisegundos de la ejecución secuencial.
+         - @return duración total en milisegundos de la ejecución secuencial.
          */
         public long getTiempoSecuencialMs() {
             return tiempoSecuencialMs;
         }
 
         /**
-         * @return duración total en milisegundos de la ejecución paralela.
+         - @return duración total en milisegundos de la ejecución paralela.
          */
         public long getTiempoParaleloMs() {
             return tiempoParaleloMs;
         }
 
         /**
-         * Calcula la diferencia absoluta de tiempo ({@code tiempoSecuencialMs - tiempoParaleloMs}).
-         * Un valor positivo indica que el modo paralelo ha terminado antes que el secuencial.
+         - Calcula la diferencia absoluta de tiempo ({@code tiempoSecuencialMs - tiempoParaleloMs}).
+         - Un valor positivo indica que el modo paralelo ha terminado antes que el secuencial.
          *
-         * @return diferencia de tiempo en milisegundos.
+         - @return diferencia de tiempo en milisegundos.
          */
         public long getDiferenciaMs() {
             return tiempoSecuencialMs - tiempoParaleloMs;
         }
 
         /**
-         * Calcula el factor de aceleración o <em>speedup</em> ({@code tiempoSecuencialMs / tiempoParaleloMs}).
-         * Devuelve {@code 0.0} si el tiempo paralelo es menor o igual que cero.
+         - Calcula el factor de aceleración o <em>speedup</em> ({@code tiempoSecuencialMs / tiempoParaleloMs}).
+         - Devuelve {@code 0.0} si el tiempo paralelo es menor o igual que cero.
          *
-         * @return factor de aceleración aproximado del modo paralelo frente al secuencial.
+         - @return factor de aceleración aproximado del modo paralelo frente al secuencial.
          */
         public double getFactorAceleracion() {
             if (tiempoParaleloMs <= 0L) {
@@ -123,13 +193,13 @@ public class ServicioRendimiento {
     }
 
     /**
-     * Construye la lista de comandos para lanzar {@code cantidadProcesos} procesos externos
-     * de {@code PrimeBenchmark} con el límite {@code limitePrimos}.
+     - Construye la lista de comandos para lanzar {@code cantidadProcesos} procesos externos
+     - de {@code PrimeBenchmark} con el límite {@code limitePrimos}.
      *
-     * @param cantidadProcesos cantidad de procesos a preparar (debe ser mayor que 0).
-     * @param limitePrimos     límite superior {@code N} para el cálculo de números primos.
-     * @return lista de comandos lista para pasar a {@link ServicioEjecucion}.
-     * @throws IllegalArgumentException si {@code cantidadProcesos} es menor o igual que 0.
+     - @param cantidadProcesos cantidad de procesos a preparar (debe ser mayor que 0).
+     - @param limitePrimos     límite superior {@code N} para el cálculo de números primos.
+     - @return lista de comandos lista para pasar a {@link ServicioEjecucion}.
+     - @throws IllegalArgumentException si {@code cantidadProcesos} es menor o igual que 0.
      */
     public List<List<String>> construirComandosPrimeBenchmark(int cantidadProcesos, int limitePrimos) {
         if (cantidadProcesos <= 0) {
@@ -152,13 +222,13 @@ public class ServicioRendimiento {
     }
 
     /**
-     * Ejecuta un lote de {@code PrimeBenchmark} en modo secuencial (uno detrás de otro)
-     * y devuelve el tiempo total empleado en milisegundos.
+     - Ejecuta un lote de {@code PrimeBenchmark} en modo secuencial (uno detrás de otro)
+     - y devuelve el tiempo total empleado en milisegundos.
      *
-     * @param cantidadProcesos número de procesos a ejecutar.
-     * @param limitePrimos     límite superior {@code N} para cada instancia.
-     * @param salida           consumidor para recibir líneas o mensajes de salida (puede ser {@code null}).
-     * @return tiempo total del lote secuencial en milisegundos.
+     - @param cantidadProcesos número de procesos a ejecutar.
+     - @param limitePrimos     límite superior {@code N} para cada instancia.
+     - @param salida           consumidor para recibir líneas o mensajes de salida (puede ser {@code null}).
+     - @return tiempo total del lote secuencial en milisegundos.
      */
     public long medirSecuencialPrimeBenchmark(int cantidadProcesos,
                                               int limitePrimos,
@@ -170,13 +240,13 @@ public class ServicioRendimiento {
     }
 
     /**
-     * Ejecuta un lote de {@code PrimeBenchmark} en modo paralelo (lanzando los procesos
-     * sin esperar a que termine cada uno antes de iniciar el siguiente) y devuelve el tiempo total en ms[cite: 32].
+     - Ejecuta un lote de {@code PrimeBenchmark} en modo paralelo (lanzando los procesos
+     - sin esperar a que termine cada uno antes de iniciar el siguiente) y devuelve el tiempo total en ms.
      *
-     * @param cantidadProcesos número de procesos a ejecutar.
-     * @param limitePrimos     límite superior {@code N} para cada instancia.
-     * @param salida           consumidor para recibir líneas o mensajes de salida (puede ser {@code null}).
-     * @return tiempo total del lote paralelo en milisegundos.
+     - @param cantidadProcesos número de procesos a ejecutar.
+     - @param limitePrimos     límite superior {@code N} para cada instancia.
+     - @param salida           consumidor para recibir líneas o mensajes de salida (puede ser {@code null}).
+     - @return tiempo total del lote paralelo en milisegundos.
      */
     public long medirParaleloPrimeBenchmark(int cantidadProcesos,
                                             int limitePrimos,
@@ -187,13 +257,13 @@ public class ServicioRendimiento {
     }
 
     /**
-     * Ejecuta y compara secuencialmente y en paralelo un lote de {@code PrimeBenchmark}
-     * para una misma cantidad de procesos y un mismo límite {@code N}[cite: 32, 33].
+     - Ejecuta y compara secuencialmente y en paralelo un lote de {@code PrimeBenchmark}
+     - para una misma cantidad de procesos y un mismo límite {@code N}.
      *
-     * @param cantidadProcesos número de procesos del lote.
-     * @param limitePrimos     límite superior {@code N} para el cálculo de primos.
-     * @param salida           consumidor para registrar el progreso de la prueba (puede ser {@code null}).
-     * @return objeto {@link ResultadoComparativa} con ambos tiempos y las métricas calculadas.
+     - @param cantidadProcesos número de procesos del lote.
+     - @param limitePrimos     límite superior {@code N} para el cálculo de primos.
+     - @param salida           consumidor para registrar el progreso de la prueba (puede ser {@code null}).
+     - @return objeto {@link ResultadoComparativa} con ambos tiempos y las métricas calculadas.
      */
     public ResultadoComparativa compararModoPrimeBenchmark(int cantidadProcesos,
                                                            int limitePrimos,
@@ -214,13 +284,13 @@ public class ServicioRendimiento {
     }
 
     /**
-     * Ejecuta la batería completa de comparativas para cada tamaño de lote indicado
-     * (o {@link #CANTIDADES_EXPERIMENTO_POR_DEFECTO} si la lista es nula o vacía)[cite: 33].
+     - Ejecuta la batería completa de comparativas para cada tamaño de lote indicado
+     - (o {@link #CANTIDADES_EXPERIMENTO_POR_DEFECTO} si la lista es nula o vacía).
      *
-     * @param cantidades   lista de cantidades de procesos a probar (por ejemplo: 1, 5, 10, 20, 50, 100)[cite: 33].
-     * @param limitePrimos límite superior {@code N} común para todas las pruebas[cite: 33].
-     * @param salida       consumidor para mostrar el avance de la ejecución (puede ser {@code null}).
-     * @return lista ordenada de {@link ResultadoComparativa} obtenida en el experimento.
+     - @param cantidades   lista de cantidades de procesos a probar (por ejemplo: 1, 5, 10, 20, 50, 100).
+     - @param limitePrimos límite superior {@code N} común para todas las pruebas.
+     - @param salida       consumidor para mostrar el avance de la ejecución (puede ser {@code null}).
+     - @return lista ordenada de {@link ResultadoComparativa} obtenida en el experimento.
      */
     public List<ResultadoComparativa> ejecutarExperimentoEscalabilidad(List<Integer> cantidades,
                                                                        int limitePrimos,
@@ -236,10 +306,10 @@ public class ServicioRendimiento {
     }
 
     /**
-     * Calcula la duración media en milisegundos a partir de una colección de {@link EjecucionProceso}.
+     - Calcula la duración media en milisegundos a partir de una colección de {@link EjecucionProceso}.
      *
-     * @param ejecuciones lista de ejecuciones registradas.
-     * @return duración media en milisegundos, o {@code 0.0} si la lista está vacía o es nula.
+     - @param ejecuciones lista de ejecuciones registradas.
+     - @return duración media en milisegundos, o {@code 0.0} si la lista está vacía o es nula.
      */
     public double calcularDuracionMediaMs(List<EjecucionProceso> ejecuciones) {
         if (ejecuciones == null || ejecuciones.isEmpty()) {
@@ -256,11 +326,11 @@ public class ServicioRendimiento {
     }
 
     /**
-     * Formatea una tabla de texto alineada con los resultados comparativos para mostrarla
-     * en consola, en la interfaz o como apoyo para la memoria técnica.
+     - Formatea una tabla de texto alineada con los resultados comparativos para mostrarla
+     - en consola, en la interfaz o como apoyo para la memoria técnica.
      *
-     * @param resultados lista de resultados a formatear.
-     * @return tabla de resultados en formato texto.
+     - @param resultados lista de resultados a formatear.
+     - @return tabla de resultados en formato texto.
      */
     public String formatearTablaResultados(List<ResultadoComparativa> resultados) {
         StringBuilder sb = new StringBuilder();
