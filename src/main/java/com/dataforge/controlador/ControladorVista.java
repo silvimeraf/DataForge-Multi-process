@@ -1,6 +1,8 @@
 package com.dataforge.controlador;
 
 import com.dataforge.modelo.ProcesoInfo;
+import com.dataforge.servicios.ServicioComunicacion;
+import com.dataforge.servicios.ServicioEjecucion;
 import com.dataforge.servicios.ServicioRendimiento;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
@@ -13,30 +15,27 @@ import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.util.Duration;
 
-import java.io.*;
-import java.lang.ProcessBuilder.Redirect;
-import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.time.LocalTime;
-import java.time.ZoneId;
+import java.io.File;
+import java.io.IOException;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Controlador principal de la interfaz gráfica de DataForge (RA1).
- * Orquesta los procesos externos mediante ProcessBuilder y Process sin utilizar hilos manuales,
- * cumpliendo estrictamente las restricciones técnicas del módulo.
+ * Se encarga de conectar los elementos visuales definidos en el archivo FXML con los
+ * servicios de negocio. Recoge las acciones del usuario, valida los datos básicos del
+ * formulario y actualiza la tabla y los paneles de salida sin utilizar hilos manuales,
+ * apoyándose en un Timeline de JavaFX para no bloquear la pantalla mientras corren los procesos.
  */
 public class ControladorVista {
 
-    // Zona 1: Selección de tarea
+    // Controles de la zona superior donde se elige qué tarea ejecutar y se puede vaciar la tabla
     @FXML private ComboBox<String> comboTareas;
     @FXML private Label lblDescripcionTarea;
     @FXML private Button btnLimpiarTabla;
 
-    // Zona 2: Configuración dinámica
+    // Contenedores y campos de parámetros que se muestran u ocultan según la tarea elegida
     @FXML private VBox boxFicheroEntrada;
     @FXML private TextField txtRutaFichero;
     @FXML private Button btnExaminarEntrada;
@@ -47,14 +46,14 @@ public class ControladorVista {
     @FXML private VBox boxPalabraBuscar;
     @FXML private TextField txtPalabra;
 
-    // Zona 3: Modo de ejecución
+    // Controles para configurar el modo de lanzamiento, el número de copias y los botones principales
     @FXML private ComboBox<String> comboModo;
     @FXML private Spinner<Integer> spinnerProcesos;
     @FXML private Button btnIniciar;
     @FXML private Button btnDetener;
     @FXML private Button btnBenchmark;
 
-    // Zona 4: Redirecciones
+    // Desplegables, botones y etiquetas informativas para redirigir los flujos estándar (stdout, stderr y stdin)
     @FXML private ComboBox<String> comboStdout;
     @FXML private Button btnFicheroStdout;
     @FXML private Label lblRutaStdout;
@@ -65,7 +64,7 @@ public class ControladorVista {
     @FXML private Button btnFicheroStdin;
     @FXML private Label lblRutaStdin;
 
-    // Zona 5: Monitor de procesos
+    // Tabla central que actúa como monitor en vivo de todos los procesos lanzados
     @FXML private TableView<ProcesoInfo> tablaProcesos;
     @FXML private TableColumn<ProcesoInfo, Integer> colId;
     @FXML private TableColumn<ProcesoInfo, Long> colPid;
@@ -78,13 +77,13 @@ public class ControladorVista {
     @FXML private TableColumn<ProcesoInfo, String> colExitCode;
     @FXML private TableColumn<ProcesoInfo, String> colEstado;
 
-    // Zonas 6 y 7: stdout y stderr
+    // Áreas de texto inferiores para leer por separado la salida normal y los errores de cada proceso
     @FXML private TextArea txtStdout;
     @FXML private Button btnLimpiarStdout;
     @FXML private TextArea txtStderr;
     @FXML private Button btnLimpiarStderr;
 
-    // Zona 8: Información general
+    // Etiquetas y barra de progreso con el resumen estadístico global de las ejecuciones
     @FXML private Label lblTotalEjecutados;
     @FXML private Label lblFinalizados;
     @FXML private Label lblEnEjecucion;
@@ -94,35 +93,34 @@ public class ControladorVista {
     @FXML private Label lblResumenCabecera;
     @FXML private Label lblEstadoBarra;
 
+    // Lista observable enlazada a la tabla: cualquier cambio aquí se refleja automáticamente en pantalla
     private final ObservableList<ProcesoInfo> listaProcesos = FXCollections.observableArrayList();
     private final DateTimeFormatter formatoHora = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
 
+    // Referencias a los ficheros seleccionados por el usuario cuando elige redirigir flujos a disco
     private File archivoDestinoStdout;
     private File archivoDestinoStderr;
     private File archivoOrigenStdin;
 
-    // Estructuras para vigilar procesos activos mediante Timeline de JavaFX (sin Thread)
-    private static class ProcesoEnCurso {
-        Process proceso;
-        ProcesoInfo info;
-        long tiempoInicioMs;
-        boolean canceladoPorUsuario = false;
-        File tempStdout;
-        File tempStderr;
-        String modoStdout;
-        String modoStderr;
-    }
-
-    private final List<ProcesoEnCurso> procesosVigilados = new ArrayList<>();
-    private final List<List<String>> colaPendienteSecuencial = new ArrayList<>();
+    // Temporizador de JavaFX que revisa periódicamente si los procesos activos han acabado
     private Timeline vigilanteProcesos;
     private long inicioLoteMs = 0L;
     private int totalLoteActual = 0;
+
+    // Instancias de los servicios que contienen la lógica real de procesos, tuberías y rendimiento
+    private final ServicioEjecucion servicioEjecucion = new ServicioEjecucion();
+    private final ServicioComunicacion servicioComunicacion = new ServicioComunicacion();
     private final ServicioRendimiento servicioRendimiento = new ServicioRendimiento();
 
+    /**
+     * Método que JavaFX ejecuta automáticamente al cargar la vista FXML.
+     * Deja preparados los valores por defecto de los desplegables, enlaza las columnas
+     * de la tabla con los atributos de ProcesoInfo, asigna las acciones a todos los botones
+     * y arranca el temporizador que vigila los procesos en segundo plano sin usar hilos.
+     */
     @FXML
     public void initialize() {
-        // 1. Inicializar combos
+        // Rellenamos los desplegables con las opciones disponibles y fijamos la selección inicial
         comboTareas.getItems().addAll(
                 "Text Analyzer",
                 "Prime Benchmark",
@@ -133,6 +131,7 @@ public class ControladorVista {
         comboModo.getItems().addAll("Individual", "Secuencial", "Paralelo");
         comboModo.setValue("Individual");
 
+        // El selector numérico permite lanzar hasta 100 procesos, pero arranca desactivado en modo Individual
         spinnerProcesos.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 100, 1));
         spinnerProcesos.setDisable(true);
 
@@ -145,7 +144,7 @@ public class ControladorVista {
         comboStdin.getItems().addAll("Fichero (argumento)", "Desde DataForge", "Desde fichero (stdin)");
         comboStdin.setValue("Fichero (argumento)");
 
-        // 2. Configurar columnas de la tabla
+        // Vinculamos cada columna de la tabla con el nombre exacto del atributo en la clase ProcesoInfo
         colId.setCellValueFactory(new PropertyValueFactory<>("id"));
         colPid.setCellValueFactory(new PropertyValueFactory<>("pid"));
         colTarea.setCellValueFactory(new PropertyValueFactory<>("tarea"));
@@ -158,7 +157,7 @@ public class ControladorVista {
         colEstado.setCellValueFactory(new PropertyValueFactory<>("estado"));
         tablaProcesos.setItems(listaProcesos);
 
-        // Al seleccionar una fila de la tabla, mostrar su stdout y stderr guardados
+        // Cuando el usuario hace clic en una fila de la tabla, cargamos abajo lo que escribió ese proceso concreto
         tablaProcesos.getSelectionModel().selectedItemProperty().addListener((obs, ant, sel) -> {
             if (sel != null) {
                 txtStdout.setText(sel.getSalidaStdout());
@@ -166,12 +165,13 @@ public class ControladorVista {
             }
         });
 
-        // 3. Listeners de configuración dinámica
+        // Hacemos que el formulario se adapte al instante cada vez que cambia la tarea o alguna redirección
         comboTareas.setOnAction(e -> actualizarFormularioDinamico());
         comboStdin.setOnAction(e -> actualizarRedireccionesUI());
         comboStdout.setOnAction(e -> actualizarRedireccionesUI());
         comboStderr.setOnAction(e -> actualizarRedireccionesUI());
 
+        // Si el modo es Individual fijamos 1 proceso; si pasa a Secuencial o Paralelo habilitamos el selector
         comboModo.setOnAction(e -> {
             boolean esIndividual = "Individual".equals(comboModo.getValue());
             spinnerProcesos.setDisable(esIndividual);
@@ -184,7 +184,7 @@ public class ControladorVista {
         });
         spinnerProcesos.valueProperty().addListener((o, a, b) -> actualizarBarraEstado());
 
-        // 4. Selectores de archivo
+        // Configuramos los botones que abren el explorador de archivos del sistema operativo
         btnExaminarEntrada.setOnAction(e -> {
             File f = elegirArchivoAbrir("Seleccionar fichero de texto a analizar");
             if (f != null) txtRutaFichero.setText(f.getAbsolutePath());
@@ -211,7 +211,7 @@ public class ControladorVista {
             }
         });
 
-        // 5. Botones de acción
+        // Conectamos los botones principales de ejecución, parada, experimento y limpieza
         btnIniciar.setOnAction(e -> ejecutarAccionPrincipal());
         btnDetener.setOnAction(e -> detenerProcesoSeleccionado());
         btnBenchmark.setOnAction(e -> ejecutarExperimentoRendimiento());
@@ -227,7 +227,8 @@ public class ControladorVista {
             actualizarEstadisticas();
         });
 
-        // 6. Temporizador vigilante de procesos (sin hilos manuales)
+        // Arrancamos un temporizador indefinido que revisa cada 80 milisegundos si los procesos hijos han terminado.
+        // Esto permite mantener la ventana fluida y reactiva sin incumplir la prohibición de usar Thread.
         vigilanteProcesos = new Timeline(new KeyFrame(Duration.millis(80), e -> vigilarProcesosActivos()));
         vigilanteProcesos.setCycleCount(Timeline.INDEFINITE);
         vigilanteProcesos.play();
@@ -236,6 +237,11 @@ public class ControladorVista {
         actualizarRedireccionesUI();
     }
 
+    /**
+     * Muestra u oculta las cajas de texto de parámetros según la tarea seleccionada y el origen
+     * de datos elegido para stdin. De este modo el usuario solo ve los campos que necesita rellenar
+     * y no quedan huecos vacíos en la interfaz gracias a setManaged.
+     */
     private void actualizarFormularioDinamico() {
         String tarea = comboTareas.getValue();
         boolean esText = "Text Analyzer".equals(tarea);
@@ -267,6 +273,10 @@ public class ControladorVista {
         }
     }
 
+    /**
+     * Habilita o deshabilita los botones de selección de fichero en la zona de redirecciones
+     * y actualiza las etiquetas descriptivas para que siempre se sepa hacia dónde va cada flujo.
+     */
     private void actualizarRedireccionesUI() {
         String out = comboStdout.getValue();
         btnFicheroStdout.setDisable(!"Fichero".equals(out));
@@ -289,12 +299,17 @@ public class ControladorVista {
         actualizarFormularioDinamico();
     }
 
+    /**
+     * Se ejecuta al pulsar el botón Iniciar. Valida que no falten rutas obligatorias cuando se ha
+     * elegido redirigir a fichero y delega en ServicioEjecucion (o ServicioComunicacion si es un
+     * pipeline) el lanzamiento de los procesos en modo Individual, Secuencial o Paralelo.
+     */
     private void ejecutarAccionPrincipal() {
         String tarea = comboTareas.getValue();
         String modo = comboModo.getValue();
         int numProcesos = "Individual".equals(modo) ? 1 : spinnerProcesos.getValue();
 
-        // Validaciones previas
+        // Comprobamos antes de lanzar nada que el usuario haya elegido archivo si marcó la opción Fichero
         if ("Fichero".equals(comboStdout.getValue()) && archivoDestinoStdout == null) {
             txtStderr.setText("[ERROR] Has elegido redirigir stdout a Fichero pero no has seleccionado archivo destino.\n");
             return;
@@ -308,33 +323,17 @@ public class ControladorVista {
             return;
         }
 
-        // Caso especial: Pipeline con ProcessBuilder.startPipeline()
+        // Si la tarea elegida es el encadenamiento con tubería, seguimos su flujo específico
         if (tarea.startsWith("Pipeline")) {
             ejecutarTareaPipeline();
             return;
         }
 
-        // Construir los comandos para Individual, Secuencial o Paralelo
-        List<List<String>> comandos = new ArrayList<>();
-        String classpath = System.getProperty("java.class.path");
-
-        for (int i = 0; i < numProcesos; i++) {
-            if ("Prime Benchmark".equals(tarea)) {
-                String limite = txtLimiteN.getText().trim();
-                comandos.add(List.of(
-                        "java", "-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8",
-                        "-cp", classpath, "com.dataforge.tareas.PrimeBenchmark", limite
-                ));
-            } else {
-                String palabra = txtPalabra.getText().trim();
-                String modoStdin = comboStdin.getValue();
-                String origen = "Fichero (argumento)".equals(modoStdin) ? txtRutaFichero.getText().trim() : "stdin";
-                comandos.add(List.of(
-                        "java", "-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8",
-                        "-cp", classpath, "com.dataforge.tareas.TextAnalyzer", origen, palabra
-                ));
-            }
-        }
+        // Pedimos al servicio de ejecución que prepare la lista de comandos Java con sus argumentos
+        List<List<String>> comandos = servicioEjecucion.construirComandos(
+                tarea, numProcesos, txtLimiteN.getText().trim(),
+                txtPalabra.getText().trim(), comboStdin.getValue(), txtRutaFichero.getText().trim()
+        );
 
         inicioLoteMs = System.currentTimeMillis();
         totalLoteActual = comandos.size();
@@ -342,18 +341,36 @@ public class ControladorVista {
         lblResumenCabecera.setText("Ejecutando " + totalLoteActual + " proceso(s) en modo " + modo + "...");
 
         if ("Paralelo".equals(modo)) {
-            // MODO PARALELO: Se inician todos los procesos del S.O. de golpe sin esperar
+            // En paralelo lanzamos todos los comandos seguidos sin esperar a que termine el anterior
             for (List<String> cmd : comandos) {
-                lanzarUnProcesoAsincrono(cmd, tarea, modo);
+                servicioEjecucion.lanzarUnProcesoAsincrono(
+                        cmd, tarea, modo, listaProcesos.size() + 1,
+                        comboStdout.getValue(), archivoDestinoStdout,
+                        comboStderr.getValue(), archivoDestinoStderr,
+                        comboStdin.getValue(), archivoOrigenStdin, txtContenidoStdin.getText(),
+                        info -> { listaProcesos.add(info); actualizarEstadisticas(); },
+                        err -> txtStderr.appendText(err)
+                );
             }
         } else {
-            // MODO INDIVIDUAL O SECUENCIAL: Se lanza el primero y el resto queda en cola hasta que termine
-            colaPendienteSecuencial.clear();
-            colaPendienteSecuencial.addAll(comandos);
-            List<String> primero = colaPendienteSecuencial.remove(0);
-            lanzarUnProcesoAsincrono(primero, tarea, modo);
+            // En individual o secuencial lanzamos solo el primero; los demás quedan en cola hasta que este acabe
+            servicioEjecucion.iniciarLoteSecuencial(
+                    comandos, tarea, modo, listaProcesos.size() + 1,
+                    comboStdout.getValue(), archivoDestinoStdout,
+                    comboStderr.getValue(), archivoDestinoStderr,
+                    comboStdin.getValue(), archivoOrigenStdin, txtContenidoStdin.getText(),
+                    info -> { listaProcesos.add(info); actualizarEstadisticas(); },
+                    err -> txtStderr.appendText(err)
+            );
         }
     }
+
+    /**
+     * Lanza la batería automática de pruebas de rendimiento (1, 5, 10, 20, 50 y 100 procesos)
+     * comparando ejecución secuencial frente a paralela sobre PrimeBenchmark.
+     * Utiliza un Timeline para ir ejecutando un tamaño de lote en cada paso y poder refrescar
+     * la tabla comparativa y la barra de progreso en pantalla entre lote y lote.
+     */
     private void ejecutarExperimentoRendimiento() {
         int limiteN;
         try {
@@ -367,6 +384,7 @@ public class ControladorVista {
             return;
         }
 
+        // Bloqueamos los botones de lanzamiento mientras dura la batería para evitar ejecuciones solapadas
         btnIniciar.setDisable(true);
         btnBenchmark.setDisable(true);
         txtStdout.setText("Ejecutando experimento de escalabilidad con N=" + limiteN + "...\n");
@@ -382,6 +400,7 @@ public class ControladorVista {
         List<ServicioRendimiento.ResultadoComparativa> resultados = new ArrayList<>();
         long inicioGlobal = System.currentTimeMillis();
 
+        // Programamos un Timeline con tantas repeticiones como tamaños de lote tenga el experimento
         Timeline ejecutorLotes = new Timeline();
         ejecutorLotes.setCycleCount(lotes.size());
 
@@ -400,6 +419,7 @@ public class ControladorVista {
                     + res.getTiempoParaleloMs() + " ms)\n\n"
                     + servicioRendimiento.formatearTablaResultados(resultados));
 
+            // Multiplicamos por 2 porque cada lote ejecuta la misma cantidad primero en secuencial y luego en paralelo
             procesosAcumulados[0] += cantidad * 2;
             lblTotalEjecutados.setText(String.valueOf(procesosAcumulados[0]));
             lblFinalizados.setText(String.valueOf(procesosAcumulados[0]));
@@ -407,6 +427,7 @@ public class ControladorVista {
             barraProgreso.setProgress((double) indice[0] / lotes.size());
         }));
 
+        // Al terminar todos los lotes, mostramos el tiempo total y volvemos a habilitar los botones
         ejecutorLotes.setOnFinished(ev -> {
             long totalMs = System.currentTimeMillis() - inicioGlobal;
             lblTotalEjecutados.setText(procesosAcumulados[0] + " (6 lotes)");
@@ -423,161 +444,35 @@ public class ControladorVista {
         ejecutorLotes.play();
     }
 
-    private void lanzarUnProcesoAsincrono(List<String> comando, String tarea, String modo) {
-        try {
-            ProcessBuilder pb = new ProcessBuilder(comando);
-            pb.redirectErrorStream(false);
-
-            String modoOut = comboStdout.getValue();
-            String modoErr = comboStderr.getValue();
-            String modoIn = comboStdin.getValue();
-
-            File tempOut = null;
-            File tempErr = null;
-
-            // Configurar stdout según ProcessBuilder.Redirect
-            if ("DISCARD".equals(modoOut)) {
-                pb.redirectOutput(Redirect.DISCARD);
-            } else if ("Fichero".equals(modoOut)) {
-                pb.redirectOutput(Redirect.to(archivoDestinoStdout));
-            } else {
-                tempOut = File.createTempFile("df_out_", ".tmp");
-                tempOut.deleteOnExit();
-                pb.redirectOutput(Redirect.to(tempOut));
-            }
-
-            // Configurar stderr según ProcessBuilder.Redirect
-            if ("DISCARD".equals(modoErr)) {
-                pb.redirectError(Redirect.DISCARD);
-            } else if ("Fichero".equals(modoErr)) {
-                pb.redirectError(Redirect.to(archivoDestinoStderr));
-            } else {
-                tempErr = File.createTempFile("df_err_", ".tmp");
-                tempErr.deleteOnExit();
-                pb.redirectError(Redirect.to(tempErr));
-            }
-
-            // Configurar stdin desde fichero si corresponde
-            if ("Text Analyzer".equals(tarea) && "Desde fichero (stdin)".equals(modoIn)) {
-                pb.redirectInput(Redirect.from(archivoOrigenStdin));
-            }
-
-            long ahora = System.currentTimeMillis();
-            Process proceso = pb.start();
-
-            // Si stdin es "Desde DataForge", escribir por getOutputStream() y cerrar para EOF
-            if ("Text Analyzer".equals(tarea) && "Desde DataForge".equals(modoIn)) {
-                try (BufferedWriter bw = new BufferedWriter(
-                        new OutputStreamWriter(proceso.getOutputStream(), StandardCharsets.UTF_8))) {
-                    bw.write(txtContenidoStdin.getText());
-                    bw.newLine();
-                    bw.flush();
-                }
-            }
-
-            String resumenParams = comando.get(comando.size() - 2) + " | " + comando.get(comando.size() - 1);
-            if ("Prime Benchmark".equals(tarea)) {
-                resumenParams = "N=" + comando.get(comando.size() - 1);
-            }
-
-            ProcesoInfo info = new ProcesoInfo(
-                    listaProcesos.size() + 1,
-                    proceso.pid(),
-                    tarea,
-                    modo,
-                    resumenParams,
-                    LocalTime.ofInstant(Instant.ofEpochMilli(ahora), ZoneId.systemDefault()).format(formatoHora),
-                    "-",
-                    "-",
-                    "-",
-                    "Ejecutando"
-            );
-            listaProcesos.add(info);
-
-            ProcesoEnCurso pc = new ProcesoEnCurso();
-            pc.proceso = proceso;
-            pc.info = info;
-            pc.tiempoInicioMs = ahora;
-            pc.tempStdout = tempOut;
-            pc.tempStderr = tempErr;
-            pc.modoStdout = modoOut;
-            pc.modoStderr = modoErr;
-            procesosVigilados.add(pc);
-
-            actualizarEstadisticas();
-
-        } catch (IOException ex) {
-            txtStderr.appendText("[ERROR] No se pudo iniciar el proceso: " + ex.getMessage() + "\n");
-        }
-    }
-
+    /**
+     * Método invocado cada 80 ms por el Timeline vigilante.
+     * Consulta a ServicioEjecucion si alguno de los procesos activos ya ha finalizado. Cuando ocurre,
+     * refresca la tabla, actualiza los contadores y, si estamos en modo Secuencial con tareas pendientes
+     * en la cola, lanza el siguiente proceso; si ya no queda ninguno, calcula el tiempo total del lote.
+     */
     private void vigilarProcesosActivos() {
-        if (procesosVigilados.isEmpty()) return;
+        boolean huboTerminados = servicioEjecucion.vigilarProcesosActivos(
+                archivoDestinoStdout,
+                archivoDestinoStderr,
+                out -> txtStdout.setText(out),
+                err -> txtStderr.setText(err)
+        );
 
-        List<ProcesoEnCurso> terminados = new ArrayList<>();
-
-        for (ProcesoEnCurso pc : procesosVigilados) {
-            try {
-                if (!pc.proceso.isAlive() || pc.proceso.waitFor(2, TimeUnit.MILLISECONDS)) {
-                    int exitCode = pc.proceso.waitFor();
-                    long finMs = System.currentTimeMillis();
-                    long duracion = finMs - pc.tiempoInicioMs;
-
-                    pc.info.setFin(LocalTime.ofInstant(Instant.ofEpochMilli(finMs), ZoneId.systemDefault()).format(formatoHora));
-                    pc.info.setDuracion(String.valueOf(duracion));
-                    pc.info.setExitCode(String.valueOf(exitCode));
-
-                    if (pc.canceladoPorUsuario) {
-                        pc.info.setEstado("Cancelado (destroy)");
-                    } else if (exitCode == 0) {
-                        pc.info.setEstado("Finalizado");
-                    } else {
-                        pc.info.setEstado("Error");
-                    }
-
-                    // Recoger stdout según redirección elegida
-                    String outTexto;
-                    if ("Capturar en DataForge".equals(pc.modoStdout)) {
-                        outTexto = leerFicheroTemporal(pc.tempStdout);
-                    } else if ("Fichero".equals(pc.modoStdout)) {
-                        outTexto = "stdout → FICHERO: " + archivoDestinoStdout.getAbsolutePath();
-                    } else {
-                        outTexto = "stdout → DISCARD: salida descartada.";
-                    }
-                    pc.info.setSalidaStdout(outTexto);
-
-                    // Recoger stderr según redirección elegida
-                    String errTexto;
-                    if ("Capturar en DataForge".equals(pc.modoStderr)) {
-                        errTexto = leerFicheroTemporal(pc.tempStderr);
-                    } else if ("Fichero".equals(pc.modoStderr)) {
-                        errTexto = "stderr → FICHERO: " + archivoDestinoStderr.getAbsolutePath();
-                    } else {
-                        errTexto = "stderr → DISCARD: salida de error descartada.";
-                    }
-                    pc.info.setSalidaStderr(errTexto);
-
-                    // Mostrar salida en los paneles inferiores
-                    txtStdout.setText(outTexto);
-                    txtStderr.setText(errTexto);
-
-                    terminados.add(pc);
-                }
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-            }
-        }
-
-        if (!terminados.isEmpty()) {
-            procesosVigilados.removeAll(terminados);
+        if (huboTerminados) {
             tablaProcesos.refresh();
             actualizarEstadisticas();
 
-            // Si estamos en modo Secuencial y quedan procesos en cola, lanzar el siguiente ahora
-            if (!colaPendienteSecuencial.isEmpty() && procesosVigilados.isEmpty()) {
-                List<String> siguiente = colaPendienteSecuencial.remove(0);
-                lanzarUnProcesoAsincrono(siguiente, comboTareas.getValue(), "Secuencial");
-            } else if (procesosVigilados.isEmpty() && colaPendienteSecuencial.isEmpty()) {
+            if (servicioEjecucion.hayColaSecuencial() && !servicioEjecucion.hayProcesosVigilados()) {
+                List<String> siguiente = servicioEjecucion.extraerSiguienteSecuencial();
+                servicioEjecucion.lanzarUnProcesoAsincrono(
+                        siguiente, comboTareas.getValue(), "Secuencial", listaProcesos.size() + 1,
+                        comboStdout.getValue(), archivoDestinoStdout,
+                        comboStderr.getValue(), archivoDestinoStderr,
+                        comboStdin.getValue(), archivoOrigenStdin, txtContenidoStdin.getText(),
+                        info -> { listaProcesos.add(info); actualizarEstadisticas(); },
+                        err -> txtStderr.appendText(err)
+                );
+            } else if (!servicioEjecucion.hayProcesosVigilados() && !servicioEjecucion.hayColaSecuencial()) {
                 long tiempoTotalLote = System.currentTimeMillis() - inicioLoteMs;
                 lblTiempoLote.setText("Tiempo total (lote): " + tiempoTotalLote + " ms");
                 barraProgreso.setProgress(1.0);
@@ -587,12 +482,13 @@ public class ControladorVista {
     }
 
     /**
-     * Ejecuta la tarea "Pipeline: Prime Benchmark -> Text Analyzer" usando ProcessBuilder.startPipeline().
+     * Ejecuta la tarea encadenada donde la salida estándar de PrimeBenchmark alimenta
+     * directamente la entrada estándar de TextAnalyzer mediante ProcessBuilder.startPipeline(),
+     * registrando ambos procesos en la tabla y mostrando el resultado final en pantalla.
      */
     private void ejecutarTareaPipeline() {
         String limite = txtLimiteN.getText().trim();
         String palabra = txtPalabra.getText().trim();
-        String classpath = System.getProperty("java.class.path");
 
         if (limite.isBlank() || palabra.isBlank()) {
             txtStderr.setText("[ERROR] Para el Pipeline debes indicar el límite N y la palabra a buscar.\n");
@@ -600,47 +496,15 @@ public class ControladorVista {
         }
 
         try {
-            long inicio = System.currentTimeMillis();
-            ProcessBuilder pb1 = new ProcessBuilder(
-                    "java", "-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8",
-                    "-cp", classpath, "com.dataforge.tareas.PrimeBenchmark", limite
+            List<ProcesoInfo> resultados = servicioComunicacion.ejecutarPipelineUI(
+                    listaProcesos.size() + 1, limite, palabra, formatoHora
             );
-            ProcessBuilder pb2 = new ProcessBuilder(
-                    "java", "-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8",
-                    "-cp", classpath, "com.dataforge.tareas.TextAnalyzer", "stdin", palabra
-            );
+            ProcesoInfo info2 = resultados.get(1);
 
-            // Conectar stdout de PrimeBenchmark -> stdin de TextAnalyzer mediante startPipeline()
-            List<Process> procesos = ProcessBuilder.startPipeline(List.of(pb1, pb2));
-            Process pPrimos = procesos.get(0);
-            Process pAnalizador = procesos.get(1);
-
-            int cod1 = pPrimos.waitFor();
-            String salidaFinal = new String(pAnalizador.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            String errorFinal = new String(pAnalizador.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
-            int cod2 = pAnalizador.waitFor();
-
-            long fin = System.currentTimeMillis();
-            long duracion = fin - inicio;
-
-            String horaIni = LocalTime.ofInstant(Instant.ofEpochMilli(inicio), ZoneId.systemDefault()).format(formatoHora);
-            String horaFin = LocalTime.ofInstant(Instant.ofEpochMilli(fin), ZoneId.systemDefault()).format(formatoHora);
-
-            ProcesoInfo info1 = new ProcesoInfo(listaProcesos.size() + 1, pPrimos.pid(),
-                    "Pipeline [1/2] PrimeBenchmark", "Pipeline", "N=" + limite,
-                    horaIni, horaFin, String.valueOf(duracion), String.valueOf(cod1), cod1 == 0 ? "Finalizado" : "Error");
-            info1.setSalidaStdout("Salida enviada directamente por PIPE a TextAnalyzer (PID " + pAnalizador.pid() + ")");
-
-            ProcesoInfo info2 = new ProcesoInfo(listaProcesos.size() + 2, pAnalizador.pid(),
-                    "Pipeline [2/2] TextAnalyzer", "Pipeline", "stdin | palabra: " + palabra,
-                    horaIni, horaFin, String.valueOf(duracion), String.valueOf(cod2), cod2 == 0 ? "Finalizado" : "Error");
-            info2.setSalidaStdout(salidaFinal);
-            info2.setSalidaStderr(errorFinal);
-
-            listaProcesos.addAll(info1, info2);
-            txtStdout.setText(salidaFinal);
-            txtStderr.setText(errorFinal);
-            lblTiempoLote.setText("Tiempo total (lote): " + duracion + " ms");
+            listaProcesos.addAll(resultados);
+            txtStdout.setText(info2.getSalidaStdout());
+            txtStderr.setText(info2.getSalidaStderr());
+            lblTiempoLote.setText("Tiempo total (lote): " + info2.getDuracion() + " ms");
             barraProgreso.setProgress(1.0);
             actualizarEstadisticas();
 
@@ -651,40 +515,20 @@ public class ControladorVista {
     }
 
     /**
-     * Detiene el proceso seleccionado en la tabla (o todos los activos si no hay selección)
-     * invocando Process.destroy().
+     * Cancela el proceso seleccionado en la tabla (o todos los que sigan activos si no hay ninguno
+     * marcado) llamando a Process.destroy() a través de ServicioEjecucion.
      */
     private void detenerProcesoSeleccionado() {
         ProcesoInfo seleccionado = tablaProcesos.getSelectionModel().getSelectedItem();
-
-        if (seleccionado != null) {
-            for (ProcesoEnCurso pc : procesosVigilados) {
-                if (pc.info == seleccionado && pc.proceso.isAlive()) {
-                    pc.canceladoPorUsuario = true;
-                    pc.proceso.destroy();
-                    txtStderr.appendText("[CANCELADO] Proceso PID " + pc.proceso.pid() + " detenido con Process.destroy().\n");
-                    return;
-                }
-            }
-        }
-
-        // Si no había fila seleccionada en ejecución, detener los que estén activos
-        int detenidos = 0;
-        for (ProcesoEnCurso pc : procesosVigilados) {
-            if (pc.proceso.isAlive()) {
-                pc.canceladoPorUsuario = true;
-                pc.proceso.destroy();
-                detenidos++;
-            }
-        }
-        colaPendienteSecuencial.clear();
-        if (detenidos > 0) {
-            txtStderr.appendText("[CANCELADO] Se han detenido " + detenidos + " proceso(s) activo(s) mediante Process.destroy().\n");
-        } else {
-            txtStderr.appendText("[INFO] No hay ningún proceso en ejecución para detener.\n");
-        }
+        String mensaje = servicioEjecucion.detenerProcesos(seleccionado);
+        txtStderr.appendText(mensaje);
     }
 
+    /**
+     * Recorre la lista de procesos de la tabla para recalcular los contadores inferiores
+     * (total ejecutados, finalizados con éxito, en ejecución y con error o cancelados)
+     * y actualizar el porcentaje de la barra de progreso del lote en curso.
+     */
     private void actualizarEstadisticas() {
         int total = listaProcesos.size();
         int finalizados = 0;
@@ -705,26 +549,21 @@ public class ControladorVista {
         lblConError.setText(String.valueOf(errores));
 
         if (totalLoteActual > 0) {
-            double completados = (double) (totalLoteActual - procesosVigilados.size() - colaPendienteSecuencial.size()) / totalLoteActual;
+            double completados = (double) (totalLoteActual - servicioEjecucion.getPendientesTotales()) / totalLoteActual;
             barraProgreso.setProgress(Math.max(0.0, Math.min(1.0, completados)));
         }
     }
 
+    /**
+     * Actualiza el texto de la barra inferior indicando el modo y la cantidad de procesos configurados.
+     */
     private void actualizarBarraEstado() {
         lblEstadoBarra.setText("Modo: " + comboModo.getValue() + " | Procesos: " + spinnerProcesos.getValue());
     }
 
-    private String leerFicheroTemporal(File f) {
-        if (f == null || !f.exists()) return "";
-        try {
-            String contenido = new String(java.nio.file.Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8);
-            f.delete();
-            return contenido;
-        } catch (IOException e) {
-            return "";
-        }
-    }
-
+    /**
+     * Abre el diálogo nativo del sistema operativo para seleccionar un fichero existente.
+     */
     private File elegirArchivoAbrir(String titulo) {
         FileChooser fc = new FileChooser();
         fc.setTitle(titulo);
@@ -732,6 +571,9 @@ public class ControladorVista {
         return fc.showOpenDialog(tablaProcesos.getScene().getWindow());
     }
 
+    /**
+     * Abre el diálogo nativo del sistema operativo para elegir dónde guardar un fichero de salida.
+     */
     private File elegirArchivoGuardar(String titulo) {
         FileChooser fc = new FileChooser();
         fc.setTitle(titulo);
